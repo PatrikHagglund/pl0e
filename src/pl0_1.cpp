@@ -39,17 +39,17 @@ void exec(Stmt* s, Env& env) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) { std::println(stderr, "Usage: {} <file> [arg1] [arg2]", argv[0]); return 1; }
+    if (argc < 2) { std::println(stderr, "Usage: {} <file> [arg1..arg{}]", argv[0], ARG_COUNT); return 1; }
     auto prog = parse_program(read_file(argv[1]));
     if (!prog) { std::println(stderr, "Error: {}", prog.error()); return 1; }
 
     Env env;
-    if constexpr (INT_BITS > 0 && INT_BITS <= 128) {
-        env["arg1"] = argc > 2 ? std::atoll(argv[2]) : 0;
-        env["arg2"] = argc > 3 ? std::atoll(argv[3]) : 0;
-    } else {
-        env["arg1"] = argc > 2 ? Int(argv[2]) : Int(0);
-        env["arg2"] = argc > 3 ? Int(argv[3]) : Int(0);
+    for (int i = 1; i <= ARG_COUNT; ++i) {
+        auto name = std::format("arg{}", i);
+        if constexpr (INT_BITS > 0 && INT_BITS <= 128)
+            env[name] = argc > i + 1 ? std::atoll(argv[i + 1]) : 0;
+        else
+            env[name] = argc > i + 1 ? Int(argv[i + 1]) : Int(0);
     }
 
     for (auto& s : *prog) {

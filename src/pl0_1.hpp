@@ -12,12 +12,15 @@
 #include <print>
 #include <format>
 
-// ---------- Configuration ----------
+// ---------- Language Implementation Configuration ----------
 
-// 0 = bigint (dynamic), 32/64/128 = native, >128 = Boost fixed-width
+// Integer bit width: 0 = bigint (dynamic), 32/64/128 = native, >128 = Boost fixed-width
 // Bigint and fixed-width have similar performance; prefer bigint to avoid overflow.
 // LLVM backend: bigint requires linking with pl0_1_rt_bigint.bc (see Makefile).
 constexpr int INT_BITS = 0;
+
+// Number of built-in arg<N> variables (arg1, arg2, ..., argN)
+constexpr int ARG_COUNT = 2;
 
 #include <boost/multiprecision/cpp_int.hpp>
 namespace mp = boost::multiprecision;

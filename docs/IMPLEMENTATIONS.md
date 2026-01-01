@@ -8,8 +8,17 @@ Interpreters and compilers for PL/0 level 1.
 |----------------|----------|------|--------|-----------------|
 | `pl01.koka` | Koka | Interpreter | 2 | Koka bigint |
 | `pl0peg1.koka` | Koka | Interpreter | 1 | Koka bigint |
-| `pl0_1.cpp` | C++ | Interpreter | 2 | Configurable (INT_BITS) |
-| `pl0_1_compile.cpp` | C++ | Compiler | 2 | Configurable (INT_BITS) |
+| `pl0_1.cpp` | C++ | Interpreter | 2 | Configurable |
+| `pl0_1_compile.cpp` | C++ | Compiler | 2 | Configurable |
+
+## Language Implementation Configuration
+
+Configured in `src/pl0_1.hpp` (C++ implementations only):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `INT_BITS` | 0 | Integer bit width (0=bigint, 32/64/128=native, >128=Boost fixed) |
+| `ARG_COUNT` | 2 | Number of built-in `arg<N>` variables (arg1, arg2, ...) |
 
 ## Interpreters
 
@@ -88,18 +97,6 @@ make run-compile      # C++ backend
 make run-llvm         # LLVM JIT
 make run-llvm-native  # LLVM native
 ```
-
-## Integer Bit Width
-
-Configured via `INT_BITS` in `src/pl0_1.hpp`:
-
-| INT_BITS | Type | Notes |
-|----------|------|-------|
-| 0 (default) | Boost cpp_int | Arbitrary precision |
-| 32, 64, 128 | Native | `int32_t`, `int64_t`, `__int128` |
-| 256+ | Boost fixed | Fixed-width multiprecision |
-
-Bigint and fixed-width have similar performance. Bigint is default to avoid overflow.
 
 ## Koka Effect Handlers
 

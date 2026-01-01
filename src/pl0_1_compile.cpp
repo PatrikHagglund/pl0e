@@ -13,7 +13,7 @@ auto collect_vars(std::vector<StmtPtr>& prog) {
         else if (auto* l = dynamic_cast<LoopStmt*>(s)) go(go, l->body.get());
     };
     for (auto& s : prog) go(go, s.get());
-    vars.erase("arg1"); vars.erase("arg2");
+    for (int i = 1; i <= ARG_COUNT; ++i) vars.erase(std::format("arg{}", i));
     return vars;
 }
 
@@ -72,12 +72,11 @@ struct CppGen {
         }
         std::println("int main(int argc, char** argv) {{");
         for (auto& v : collect_vars(prog)) std::println("  Int {} = 0;", v);
-        if constexpr (INT_BITS > 0 && INT_BITS <= 128) {
-            std::println("  Int arg1 = argc > 1 ? std::atoll(argv[1]) : 0;");
-            std::println("  Int arg2 = argc > 2 ? std::atoll(argv[2]) : 0;");
-        } else {
-            std::println("  Int arg1 = argc > 1 ? Int(argv[1]) : Int(0);");
-            std::println("  Int arg2 = argc > 2 ? Int(argv[2]) : Int(0);");
+        for (int i = 1; i <= ARG_COUNT; ++i) {
+            if constexpr (INT_BITS > 0 && INT_BITS <= 128)
+                std::println("  Int arg{0} = argc > {0} ? std::atoll(argv[{0}]) : 0;", i);
+            else
+                std::println("  Int arg{0} = argc > {0} ? Int(argv[{0}]) : Int(0);", i);
         }
         for (auto& x : prog) s(x.get());
         std::println("}}");
@@ -179,8 +178,9 @@ entry:)");
                 std::println("done{}:", idx);
                 std::println("  %a{0} = phi ptr [ %v{0}, %read{0} ], [ %z{0}, %def{0} ]", idx);
             };
-            std::println("  %arg1 = alloca ptr"); parse_arg(1); std::println("  store ptr %a1, ptr %arg1");
-            std::println("  %arg2 = alloca ptr"); parse_arg(2); std::println("  store ptr %a2, ptr %arg2");
+            for (int i = 1; i <= ARG_COUNT; ++i) {
+                std::println("  %arg{} = alloca ptr", i); parse_arg(i); std::println("  store ptr %a{0}, ptr %arg{0}", i);
+            }
         } else {
             auto ret = INT_BITS <= 32 ? "  %v = trunc i64 %v64 to i32\n  ret i32 %v"
                      : INT_BITS <= 64 ? "  ret i64 %v64"
@@ -235,8 +235,8 @@ define i32 @main(i32 %argc, ptr %argv) {{
 entry:)", I, ret, dig);
             for (auto& v : collect_vars(prog))
                 std::println("  %{} = alloca {}\n  store {} 0, ptr %{}", v, I, I, v);
-            std::println("  %arg1 = alloca {0}\n  %a1 = call {0} @parse_arg(i32 %argc, ptr %argv, i32 1)\n  store {0} %a1, ptr %arg1", I);
-            std::println("  %arg2 = alloca {0}\n  %a2 = call {0} @parse_arg(i32 %argc, ptr %argv, i32 2)\n  store {0} %a2, ptr %arg2", I);
+            for (int i = 1; i <= ARG_COUNT; ++i)
+                std::println("  %arg{0} = alloca {1}\n  %a{0} = call {1} @parse_arg(i32 %argc, ptr %argv, i32 {0})\n  store {1} %a{0}, ptr %arg{0}", i, I);
         }
         for (auto& x : prog) s(x.get());
         std::println("  ret i32 0\n}}");

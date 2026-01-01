@@ -47,6 +47,10 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - `LEDGER.md`
 
 ## Done (prune when exceeding 30 items)
+- Added ARG_COUNT configuration parameter to `src/pl0_1.hpp`
+  - Controls number of built-in arg<N> variables (default 2)
+  - Updated interpreter, C++ backend, and LLVM backend to use loops
+  - Updated docs/IMPLEMENTATIONS.md with "Language Implementation Configuration" section
 - Parameterized integer bit width via `src/pl0_1.hpp` (INT_BITS)
   - Added Boost.Multiprecision for arbitrary widths (256, 512, etc.) and bigint (INT_BITS=0)
   - Compiler emits runtime as string (removed `pl0_1_rt.ll`)

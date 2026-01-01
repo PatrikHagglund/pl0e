@@ -1,7 +1,12 @@
 IMAGE = pl0-build
 RUN_OPTS = --rm -v $(PWD):/src:Z -w /src
-CXX = podman run $(RUN_OPTS) $(IMAGE) g++
-KOKA = podman run $(RUN_OPTS) $(IMAGE) koka
+RUN = podman run $(RUN_OPTS) $(IMAGE)
+CXX = $(RUN) g++
+KOKA = $(RUN) koka
+
+# Note: timeouts must be placed *inside* the container to be effective:
+#   $(RUN) timeout 5 ./pl0_1 ...    # works
+#   timeout 5 $(RUN) ./pl0_1 ...    # does NOT work
 
 .image: Containerfile
 	podman build -t $(IMAGE) .

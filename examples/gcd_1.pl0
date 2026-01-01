@@ -1,0 +1,51 @@
+// Euclidean algorithm (GCD) in pl0_1
+// Usage: ./program <a> <b>
+// Prints gcd(a, b)
+
+a := arg1
+b := arg2
+
+loop {
+  break_ifz a
+  break_ifz b
+  break_ifz a - b
+  
+  // Determine which is larger by counting down both
+  ca := a
+  cb := b
+  loop {
+    break_ifz ca
+    break_ifz cb
+    ca := ca - 1
+    cb := cb - 1
+  }
+  
+  // if ca > 0 (a > b): a := a - b
+  loop {
+    break_ifz ca
+    a := a - b
+    ca := 0
+  }
+  
+  // if cb > 0 (b > a): b := b - a  
+  loop {
+    break_ifz cb
+    b := b - a
+    cb := 0
+  }
+}
+
+// When loop exits: a==0, b==0, or a==b
+// Result is the non-zero one (or a when equal)
+result := a
+loop {
+  break_ifz a
+  result := a
+  a := 0
+}
+loop {
+  break_ifz b
+  result := b
+  b := 0
+}
+print result

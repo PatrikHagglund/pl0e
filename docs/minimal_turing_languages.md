@@ -6,6 +6,38 @@ A programming language is considered **Turing-complete** (or Turing-equivalent) 
 
 While modern languages like C++, Python, or Java are Turing-complete, they are far from minimal. They include vast standard libraries, complex syntax, and numerous features for developer ergonomics. **Minimal** Turing-equivalent languages, by contrast, seek to achieve this computational universality with the absolute minimum number of commands, symbols, or concepts. These languages are often theoretical constructs or "esoteric" languages (esolangs) designed to explore the boundaries of computability.
 
+## The Boundary: What Requires Turing Completeness?
+
+Not all algorithms require the full power of a Turing machine. Understanding this boundary clarifies why minimal Turing-complete languages matter.
+
+### Primitive Recursive Functions
+
+Most "everyday" algorithms—factorial, Fibonacci, sorting, matrix multiplication—are **primitive recursive**: bounded iteration, guaranteed termination, recursion on strictly decreasing arguments. This corresponds to programs with only `for` loops (no `while`).
+[Wikipedia: Primitive Recursive Function](https://en.wikipedia.org/wiki/Primitive_recursive_function)
+
+### Beyond Primitive Recursion
+
+Adding **unbounded search** (the μ-operator) yields the **general recursive functions**, equivalent to Turing machines. Examples of total functions requiring this machinery: the [Ackermann function](https://en.wikipedia.org/wiki/Ackermann_function) (1928), the [Sudan function](https://en.wikipedia.org/wiki/Sudan_function) (1927).
+[Wikipedia: General Recursive Function](https://en.wikipedia.org/wiki/General_recursive_function)
+
+### Truly Undecidable Problems
+
+Some problems require Turing completeness yet remain unsolvable: the [Halting Problem](https://en.wikipedia.org/wiki/Halting_problem), the [Busy Beaver function](https://en.wikipedia.org/wiki/Busy_beaver), [Rice's theorem](https://en.wikipedia.org/wiki/Rice%27s_theorem).
+
+### The Minimal Threshold
+
+The jump to Turing-completeness occurs when a system gains unbounded loops with data-dependent exit, general recursion, or unbounded minimization.
+
+Well-known algorithms illustrating this boundary:
+
+- **[Collatz iteration](https://en.wikipedia.org/wiki/Collatz_conjecture)**: "If even, halve; if odd, triple and add 1. Repeat until reaching 1." No known bound exists on the number of steps—the algorithm requires unbounded iteration with data-dependent termination.
+
+- **[Goodstein sequences](https://en.wikipedia.org/wiki/Goodstein%27s_theorem)**: Start with a number in hereditary base-2, bump the base to 3, subtract 1, repeat. Despite appearances (the numbers grow astronomically at first), this process always reaches 0—but proving termination requires transfinite induction, beyond standard arithmetic.
+
+- **[Euclidean algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm)**: Computing GCD via repeated division. Always terminates (provably), but the number of steps depends on the input values and cannot be bounded by a simple formula of the inputs.
+
+The minimal languages below represent different ways to achieve exactly this threshold with the fewest possible primitives.
+
 ## Models and Classes
 
 This document categorizes these minimal languages into several distinct classes based on their underlying computational model.

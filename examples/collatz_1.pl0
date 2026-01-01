@@ -1,0 +1,41 @@
+// Collatz iteration in pl0_1
+// Usage: ./program <n>
+// Prints each step until reaching 1
+
+n := arg1
+
+loop {
+  print n
+  
+  // Break if n == 1
+  break_ifz n - 1
+  
+  // Compute half = n / 2 and remainder via repeated subtraction
+  half := 0
+  tmp := n
+  loop {
+    break_ifz tmp
+    break_ifz tmp - 1
+    tmp := tmp - 2
+    half := half + 1
+  }
+  // tmp == 0 means even, tmp == 1 means odd
+  
+  // is_odd = tmp (0 or 1)
+  is_odd := tmp
+  
+  // If odd: n := 3*n + 1
+  loop {
+    break_ifz is_odd
+    n := n + n + n + 1
+    is_odd := 0
+  }
+  
+  // If even: n := half (only runs if was even, i.e., tmp was 0)
+  is_even := 1 - tmp
+  loop {
+    break_ifz is_even
+    n := half
+    is_even := 0
+  }
+}

@@ -87,10 +87,41 @@ g++ -std=gnu++26 -O3 out.cpp -o out
 **LLVM backend:**
 ```bash
 ./pl0_1_compile --llvm prog.pl0 > prog.ll
-llvm-link prog.ll src/pl0_1_rt_bigint.bc -S -o out.ll
+llvm-link prog.ll src/pl0_1_rt_bigint.ll -S -o out.ll
 clang++ -O3 out.ll -o out        # native
 lli -load /lib64/libstdc++.so.6 out.ll  # JIT
 ```
+
+### LLVM Bigint Runtime (`src/pl0_1_rt_bigint.ll`)
+
+When `INT_BITS=0` (bigint), the LLVM backend uses an external runtime for arbitrary-precision arithmetic. The runtime is compiled from C++ using Boost.Multiprecision.
+
+**Exported functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `bi_new(i64) → ptr` | Allocate new bigint from i64 |
+| `bi_from_str(ptr) → ptr` | Parse string to bigint |
+| `bi_add(ptr, ptr) → ptr` | Add, return new allocation |
+| `bi_sub(ptr, ptr) → ptr` | Subtract, return new allocation |
+| `bi_neg(ptr) → ptr` | Negate, return new allocation |
+| `bi_is_zero(ptr) → i32` | Test if zero (for `break_ifz`) |
+| `bi_print(ptr)` | Print to stdout |
+| `bi_set(ptr, ptr)` | Copy value in-place |
+| `bi_set_i(ptr, i64)` | Set from i64 in-place |
+| `bi_add_to(ptr, ptr)` | Add in-place (`dst += src`) |
+| `bi_sub_to(ptr, ptr)` | Subtract in-place (`dst -= src`) |
+| `bi_neg_in(ptr)` | Negate in-place |
+
+**In-place optimization:** The compiler uses `bi_set`/`bi_add_to`/`bi_sub_to` for assignments when safe (destination doesn't appear multiple times in RHS), reducing heap allocations in hot loops.
+
+**System dependencies:**
+- `operator new` / `operator delete` — heap allocation
+- `std::cout` — printing
+- `std::string` — argument parsing
+- `abort` — error handling
+
+**LTO note:** Link-time optimization (`-flto` or `opt -O3`) provides minimal benefit (~3%) because Boost's `cpp_int` inherently requires heap allocation for arbitrary-length storage. The ~4x gap vs C++ backend is due to the C++ compiler seeing the full Boost internals and reusing stack space, while LLVM sees opaque runtime calls.
 
 ```bash
 make run-compile      # C++ backend
@@ -123,10 +154,10 @@ Example results for `2000 31` (bigint):
 
 | Implementation | Time |
 |----------------|------|
-| C++ backend -O3 | 18ms |
-| LLVM IR backend -O3 | 149ms |
-| LLVM IR backend -O0 | 186ms |
-| LLVM IR backend lli (JIT) | 288ms |
+| C++ backend -O3 | 17ms |
+| LLVM IR backend -O3 | 64ms |
+| LLVM IR backend -O0 | 104ms |
+| LLVM IR backend lli (JIT) | 194ms |
 | C++ interpreter | 0.7s |
-| Koka interpreter | 2.2s |
-| Koka interpreter (PEG) | 2.4s |
+| Koka interpreter | 1.9s |
+| Koka interpreter (PEG) | 2.3s |

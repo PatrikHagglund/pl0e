@@ -33,7 +33,6 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - Other levels do not have interpreters (or compilers). They are sketched with a PEG grammars and code example files.
 
 ## Next
-- Why such large difference in performance between C++ and LLVM IR backends when using bigints? (Insufficient link-time optimization?)
 - Revisit the use of break_ifz vs when loops for some of the examples. Which one give the least amount of code?
 - How to apply the Language Implementation Configuration parameters in pl0_1.hpp to the Koka interpreters?
 - Align pl0_0 implementations to pl0_1
@@ -58,6 +57,10 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - `LEDGER.md`
 
 ## Done (prune when exceeding 30 items)
+- Optimized LLVM bigint backend: added in-place operations (bi_set, bi_add_to, bi_sub_to)
+  - Reduced allocations by modifying destination directly instead of creating new objects
+  - clang -O3 improved from 145ms to 64ms (2.3x speedup)
+  - Fixed Makefile to use clang++ for LLVM bitcode generation
 - Fixed Makefile dependency handling: added `src/pl0_1.hpp` as dependency for C++ targets
 - Added `make test` target: verifies 5 examples across 5 implementations (25 tests)
   - Tests: example_0, example_1, factorial, collatz, gcd

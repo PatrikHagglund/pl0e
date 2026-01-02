@@ -118,9 +118,55 @@ struct LlvmGen {
         return bigint ? "null" : "0";
     }
 
+    // Check if variable appears in expression
+    bool uses_var(Expr* x, const std::string& var) {
+        if (auto* v = dynamic_cast<VarExpr*>(x)) return v->name == var;
+        if (auto* u = dynamic_cast<NegExpr*>(x)) return uses_var(u->e.get(), var);
+        if (auto* b = dynamic_cast<BinExpr*>(x)) return uses_var(b->l.get(), var) || uses_var(b->r.get(), var);
+        return false;
+    }
+
+    // Emit in-place assignment for bigint: dst := expr (modifies dst directly)
+    // Only safe when dst doesn't appear in RHS of binary ops after first use
+    void assign_inplace(const std::string& dst, Expr* x) {
+        if (auto* n = dynamic_cast<NumberExpr*>(x)) {
+            auto p = std::format("%t{}", t++);
+            std::println("  {} = load ptr, ptr %{}", p, dst);
+            std::println("  call void @bi_set_i(ptr {}, i64 {})", p, n->val);
+        } else if (auto* v = dynamic_cast<VarExpr*>(x)) {
+            auto p = std::format("%t{}", t++), s = std::format("%t{}", t++);
+            std::println("  {} = load ptr, ptr %{}", p, dst);
+            std::println("  {} = load ptr, ptr %{}", s, v->name);
+            std::println("  call void @bi_set(ptr {}, ptr {})", p, s);
+        } else if (auto* b = dynamic_cast<BinExpr*>(x)) {
+            // x := a + b  ->  x = a; x += b  (only if dst not in b)
+            if (uses_var(b->r.get(), dst)) {
+                // Fallback: evaluate fully then store
+                auto val = e(x), p = std::format("%t{}", t++);
+                std::println("  {} = load ptr, ptr %{}", p, dst);
+                std::println("  call void @bi_set(ptr {}, ptr {})", p, val);
+            } else {
+                assign_inplace(dst, b->l.get());
+                auto rv = e(b->r.get()), p = std::format("%t{}", t++);
+                std::println("  {} = load ptr, ptr %{}", p, dst);
+                std::println("  call void @bi_{}_to(ptr {}, ptr {})", b->op == '+' ? "add" : "sub", p, rv);
+            }
+        } else if (auto* u = dynamic_cast<NegExpr*>(x)) {
+            assign_inplace(dst, u->e.get());
+            auto p = std::format("%t{}", t++);
+            std::println("  {} = load ptr, ptr %{}", p, dst);
+            std::println("  call void @bi_neg_in(ptr {})", p);
+        } else {
+            // Fallback
+            std::println("  store {} {}, ptr %{}", I, e(x), dst);
+        }
+    }
+
     void s(Stmt* x) {
-        if (auto* a = dynamic_cast<AssignStmt*>(x))
-            std::println("  store {} {}, ptr %{}", I, e(a->e.get()), a->name);
+        if (auto* a = dynamic_cast<AssignStmt*>(x)) {
+            if (bigint) assign_inplace(a->name, a->e.get());
+            else std::println("  store {} {}, ptr %{}", I, e(a->e.get()), a->name);
+        }
         else if (auto* b = dynamic_cast<BlockStmt*>(x))
             for (auto& y : b->stmts) s(y.get());
         else if (auto* l = dynamic_cast<LoopStmt*>(x)) {
@@ -159,6 +205,11 @@ declare ptr @bi_neg(ptr)
 declare i32 @bi_is_zero(ptr)
 declare void @bi_print(ptr)
 declare ptr @bi_from_str(ptr)
+declare void @bi_set(ptr, ptr)
+declare void @bi_set_i(ptr, i64)
+declare void @bi_add_to(ptr, ptr)
+declare void @bi_sub_to(ptr, ptr)
+declare void @bi_neg_in(ptr)
 
 define i32 @main(i32 %argc, ptr %argv) {{
 entry:)");

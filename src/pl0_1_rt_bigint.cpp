@@ -14,4 +14,10 @@ extern "C" {
   int bi_is_zero(void* a) { return *(Int*)a == 0 ? 1 : 0; }
   void bi_print(void* v) { std::cout << *(Int*)v << "\n"; }
   void* bi_from_str(const char* s) { return new Int(s); }
+  // In-place operations (avoid allocation)
+  void bi_set(void* dst, void* src) { *(Int*)dst = *(Int*)src; }
+  void bi_set_i(void* dst, long v) { *(Int*)dst = v; }
+  void bi_add_to(void* dst, void* src) { *(Int*)dst += *(Int*)src; }
+  void bi_sub_to(void* dst, void* src) { *(Int*)dst -= *(Int*)src; }
+  void bi_neg_in(void* v) { *(Int*)v = -*(Int*)v; }
 }

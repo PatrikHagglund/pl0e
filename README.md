@@ -135,13 +135,13 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 
 | Implementation | Time |
 |----------------|------|
-| C++ backend -O3 | 18ms |
-| LLVM IR backend -O3 | 149ms |
-| LLVM IR backend -O0 | 186ms |
-| LLVM IR backend lli (JIT) | 288ms |
+| C++ backend -O3 | 17ms |
+| LLVM IR backend -O3 | 64ms |
+| LLVM IR backend -O0 | 104ms |
+| LLVM IR backend lli (JIT) | 194ms |
 | C++ interpreter | 0.7s |
-| Koka interpreter | 2.2s |
-| Koka interpreter (PEG) | 2.4s |
+| Koka interpreter | 1.9s |
+| Koka interpreter (PEG) | 2.3s |
 
 ## Further Reading
 

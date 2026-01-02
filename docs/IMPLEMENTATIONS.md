@@ -166,3 +166,21 @@ Example results for `2000 31` (bigint, INT_BITS=0):
 | Koka PEG interpreter | 2.4s |
 
 All compiled code uses `-O3` optimization.
+
+## Code Style
+
+C++ code uses `clang-format` with the following conventions (see `.clang-format`):
+
+- Based on LLVM style
+- 100 column limit
+- 4-space indentation
+- Short functions allowed on single line
+
+Additional conventions:
+- Use `std::print` with explicit `\n` in format strings (not `std::println`)
+- Short aliases `p()` for print and `f()` for format in compiler code
+
+```bash
+# Format a file
+clang-format -i src/pl0_1_compile.cpp
+```

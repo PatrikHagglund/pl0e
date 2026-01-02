@@ -53,33 +53,33 @@ entry:)", I, ret, dig);
 
 // C++ preamble
 inline void cpp_preamble() {
-    std::println("#include <print>\n#include <boost/multiprecision/cpp_int.hpp>");
+    std::print("#include <print>\n#include <boost/multiprecision/cpp_int.hpp>\n");
     if constexpr (INT_BITS == 0)
-        std::println("using Int = boost::multiprecision::cpp_int;");
+        std::print("using Int = boost::multiprecision::cpp_int;\n");
     else if constexpr (INT_BITS <= 128)
-        std::println("using Int = __int128;\nstd::string to_string(Int v) {{ if (!v) return \"0\"; std::string s; bool n = v < 0; if (n) v = -v; while (v) {{ s = char('0' + v % 10) + s; v /= 10; }} return n ? \"-\" + s : s; }}");
+        std::print("using Int = __int128;\nstd::string to_string(Int v) {{ if (!v) return \"0\"; std::string s; bool n = v < 0; if (n) v = -v; while (v) {{ s = char('0' + v % 10) + s; v /= 10; }} return n ? \"-\" + s : s; }}\n");
     else
-        std::println("using Int = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<{0}, {0}, boost::multiprecision::signed_magnitude, boost::multiprecision::unchecked, void>>;", INT_BITS);
+        std::print("using Int = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<{0}, {0}, boost::multiprecision::signed_magnitude, boost::multiprecision::unchecked, void>>;\n", INT_BITS);
 }
 
 // Emit argument parsing
 inline void emit_args_llvm_bigint() {
     for (int i = 1; i <= ARG_COUNT; ++i) {
-        std::println("  %arg{} = alloca [520 x i8]", i);
-        std::println("  %has{0} = icmp sgt i32 %argc, {0}\n  br i1 %has{0}, label %read{0}, label %def{0}\nread{0}:", i);
-        std::println("  %p{0} = getelementptr ptr, ptr %argv, i32 {0}\n  %s{0} = load ptr, ptr %p{0}\n  call void @bi_from_str(ptr %arg{0}, ptr %s{0})\n  br label %done{0}\ndef{0}:", i);
-        std::println("  call void @bi_init(ptr %arg{}, i64 0)\n  br label %done{}\ndone{}:", i, i, i);
+        std::print("  %arg{} = alloca [520 x i8]\n", i);
+        std::print("  %has{0} = icmp sgt i32 %argc, {0}\n  br i1 %has{0}, label %read{0}, label %def{0}\nread{0}:\n", i);
+        std::print("  %p{0} = getelementptr ptr, ptr %argv, i32 {0}\n  %s{0} = load ptr, ptr %p{0}\n  call void @bi_from_str(ptr %arg{0}, ptr %s{0})\n  br label %done{0}\ndef{0}:\n", i);
+        std::print("  call void @bi_init(ptr %arg{}, i64 0)\n  br label %done{}\ndone{}:\n", i, i, i);
     }
 }
 
 inline void emit_args_llvm_int(const std::string& I) {
     for (int i = 1; i <= ARG_COUNT; ++i)
-        std::println("  %arg{0} = alloca {1}\n  %a{0} = call {1} @parse_arg(i32 %argc, ptr %argv, i32 {0})\n  store {1} %a{0}, ptr %arg{0}", i, I);
+        std::print("  %arg{0} = alloca {1}\n  %a{0} = call {1} @parse_arg(i32 %argc, ptr %argv, i32 {0})\n  store {1} %a{0}, ptr %arg{0}\n", i, I);
 }
 
 inline void emit_args_cpp() {
     for (int i = 1; i <= ARG_COUNT; ++i)
         (INT_BITS > 0 && INT_BITS <= 128)
-            ? std::println("  Int arg{0} = argc > {0} ? std::atoll(argv[{0}]) : 0;", i)
-            : std::println("  Int arg{0} = argc > {0} ? Int(argv[{0}]) : Int(0);", i);
+            ? std::print("  Int arg{0} = argc > {0} ? std::atoll(argv[{0}]) : 0;\n", i)
+            : std::print("  Int arg{0} = argc > {0} ? Int(argv[{0}]) : Int(0);\n", i);
 }

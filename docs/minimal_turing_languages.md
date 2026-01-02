@@ -1,14 +1,14 @@
-# Classes of Minimal Turing-Equivalent Programming Languages
+# Classes of Minimal Turing-Complete Programming Languages
 
 ## Introduction
 
 A programming language is considered **Turing-complete** (or Turing-equivalent) if it can simulate a universal Turing machine. This means it has the theoretical capability to solve any problem that a computer can solve, given enough time and memory.
 
-While modern languages like C++, Python, or Java are Turing-complete, they are far from minimal. They include vast standard libraries, complex syntax, and numerous features for developer ergonomics. **Minimal** Turing-equivalent languages, by contrast, seek to achieve this computational universality with the absolute minimum number of commands, symbols, or concepts. These languages are often theoretical constructs or "esoteric" languages (esolangs) designed to explore the boundaries of computability.
+While modern languages like C++, Python, or Java are Turing-complete, they are far from minimal. They include vast standard libraries, complex syntax, and numerous features for developer ergonomics. **Minimal** Turing-complete languages, by contrast, seek to achieve this computational universality with the absolute minimum number of commands, symbols, or concepts. These languages are often theoretical constructs or "esoteric" languages (esolangs) designed to explore the boundaries of computability.
 
 ### The Essence of Computation
 
-Despite their radical differences—ranging from 1D tapes to 2D grids, and from arithmetic instructions to graph rewrites—all minimal Turing-equivalent systems share a common core:
+Despite their radical differences—ranging from 1D tapes to 2D grids, and from arithmetic instructions to graph rewrites—all minimal Turing-complete systems share a common core:
 
 1.  **Unbounded Memory/State:** A mechanism to expand state indefinitely (an infinite tape, an expanding string, a growing graph, or an infinite grid). Finite state machines cannot be Turing-complete.
 

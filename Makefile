@@ -82,6 +82,9 @@ koka-pl0: | .image
 koka-peg: | .image
 	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/pl0peg1.koka -- examples/example_0.pl0"
 
+koka-peg0: | .image
+	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/pl0peg0.koka -- examples/example_0.pl0"
+
 koka-peg-test: | .image
 	$(RUN) koka -e test/peg_test.koka
 
@@ -135,4 +138,4 @@ test: $(TARGET) $(TARGET_COMPILE) src/pl0_1_rt_bigint.ll src/pl0peg1 src/pl01
 	echo ""; echo "Results: $$pass passed, $$fail failed"; \
 	[ $$fail -eq 0 ]'
 
-.PHONY: run run-llvm run-llvm-native clean bench-1 koka-pl0 koka-peg koka-peg-test test
+.PHONY: run run-llvm run-llvm-native clean bench-1 koka-pl0 koka-peg koka-peg0 koka-peg-test test

@@ -34,8 +34,8 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 
 ## Next
 - Revisit the use of break_ifz vs when loops for some of the examples. Which one give the least amount of code?
-- How to apply the Language Implementation Configuration parameters in pl0_1.hpp to the Koka interpreters?
 - Align pl0_0 implementations to pl0_1
+- How to apply the Language Implementation Configuration parameters in pl0_1.hpp to the Koka interpreters?
 - Explore examples where parse errors (in dead code) cause different behaviour between the two Koka intepreters.
 - Explore (more of a) full embedded action language in PEG (beyond @tag)
 - Rename the pl0 languages to "E" or "e" (standing for "explore", but perhaps later for "expressive" and "efficient")?
@@ -57,6 +57,11 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - `LEDGER.md`
 
 ## Done (prune when exceeding 30 items)
+- Aligned pl0peg0.koka to pl0peg1.koka structure:
+  - Same debug output format ("Starting...", "Grammar file read...", etc.)
+  - Added arg1/arg2 support
+  - Consistent flatten-sv helper
+  - Added `koka-peg0` Makefile target
 - Optimized LLVM bigint backend: added in-place operations (bi_set, bi_add_to, bi_sub_to)
   - Reduced allocations by modifying destination directly instead of creating new objects
   - clang -O3 improved from 145ms to 64ms (2.3x speedup)

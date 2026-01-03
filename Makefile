@@ -1,17 +1,63 @@
+# Build mode: native, podman, docker, or auto
+# - native: run commands directly on host (requires all tools installed)
+# - podman: use Podman containers (default if podman available)
+# - docker: use Docker containers (fallback if docker available)
+# - auto: automatically detect best option using setup.sh logic
+BUILD_MODE ?= auto
+
+# Auto-detection: use setup.sh if available, otherwise native
+ifeq ($(BUILD_MODE),auto)
+  ifneq ($(wildcard setup.sh),)
+    BUILD_MODE := $(shell ./setup.sh --detect 2>/dev/null || echo native)
+  else
+    BUILD_MODE := native
+  endif
+endif
+
+# Container image name
 IMAGE = pl0-build
-RUN_OPTS = --rm -v $(PWD):/src:Z -w /src
-RUN = podman run $(RUN_OPTS) $(IMAGE)
-CXX = $(RUN) g++
-KOKA = $(RUN) koka
 FILE ?= examples/example_0.pl0
+
+# Configure commands based on build mode
+ifeq ($(BUILD_MODE),native)
+  # Native mode: run commands directly
+  CXX = g++
+  KOKA = koka
+  RUN =
+  IMAGE_DEPS =
+  $(info Build mode: NATIVE - running commands directly on host)
+else ifeq ($(BUILD_MODE),podman)
+  # Podman mode: use :Z for SELinux labeling
+  RUN_OPTS = --rm -v $(PWD):/src:Z -w /src
+  RUN = podman run $(RUN_OPTS) $(IMAGE)
+  CXX = $(RUN) g++
+  KOKA = $(RUN) koka
+  IMAGE_DEPS = .image
+  BUILD_CMD = podman build -t $(IMAGE) .
+  $(info Build mode: PODMAN - using Podman containers)
+else ifeq ($(BUILD_MODE),docker)
+  # Docker mode: no :Z flag (not needed/supported)
+  RUN_OPTS = --rm -v $(PWD):/src -w /src
+  RUN = docker run $(RUN_OPTS) $(IMAGE)
+  CXX = $(RUN) g++
+  KOKA = $(RUN) koka
+  IMAGE_DEPS = .image
+  BUILD_CMD = docker build -t $(IMAGE) .
+  $(info Build mode: DOCKER - using Docker containers)
+else
+  $(error Invalid BUILD_MODE: $(BUILD_MODE). Must be: auto, native, podman, or docker)
+endif
 
 # Note: timeouts must be placed *inside* the container to be effective:
 #   $(RUN) timeout 5 ./pl0_1 ...    # works
 #   timeout 5 $(RUN) ./pl0_1 ...    # does NOT work
 
+# Build container image (only for podman/docker modes)
+ifneq ($(BUILD_MODE),native)
 .image: Containerfile
-	podman build -t $(IMAGE) .
+	$(BUILD_CMD)
 	touch .image
+endif
 CXXFLAGS = -std=gnu++26 -Wall -Wextra -Werror
 
 TARGET = pl0_1
@@ -21,10 +67,10 @@ HDR = src/pl0_1.hpp
 TARGET_COMPILE = pl0_1_compile
 SRC_COMPILE = src/pl0_1_compile.cpp
 
-$(TARGET): $(SRC) $(HDR) | .image
+$(TARGET): $(SRC) $(HDR) $(IMAGE_DEPS)
 	$(CXX) $(CXXFLAGS) -O3 -o $@ $<
 
-$(TARGET_COMPILE): $(SRC_COMPILE) $(HDR) | .image
+$(TARGET_COMPILE): $(SRC_COMPILE) $(HDR) $(IMAGE_DEPS)
 	$(CXX) $(CXXFLAGS) -O3 -o $@ $<
 
 all: $(TARGET) $(TARGET_COMPILE)
@@ -43,7 +89,7 @@ run-llvm: $(TARGET_COMPILE) src/pl0_1_rt_bigint_stack.ll
 run-llvm-native: $(TARGET_COMPILE) src/pl0_1_rt_bigint_stack.ll
 	$(RUN) sh -c "./pl0_1_compile --llvm examples/example_0.pl0 > /tmp/prog.ll && $(LLVM_LINK) && clang -Wno-override-module -O3 out.ll -o out && ./out"
 
-src/pl0_1_rt_bigint_stack.ll: src/pl0_1_rt_bigint_stack.cpp | .image
+src/pl0_1_rt_bigint_stack.ll: src/pl0_1_rt_bigint_stack.cpp $(IMAGE_DEPS)
 	$(RUN) clang++ -std=c++26 -S -emit-llvm -O3 $< -o $@
 
 clean:
@@ -51,7 +97,6 @@ clean:
 
 BENCH_1 = examples/bench_1_factorial.pl0
 BENCH_1_ARGS = 2000 31
-RUN = podman run $(RUN_OPTS) $(IMAGE)
 
 bench-1: $(TARGET) $(TARGET_COMPILE) src/pl0_1_rt_bigint_stack.ll src/pl0peg1 src/pl01
 	@# All compiled code uses -O3 optimization
@@ -64,28 +109,28 @@ bench-1: $(TARGET) $(TARGET_COMPILE) src/pl0_1_rt_bigint_stack.ll src/pl0peg1 sr
 	@echo "=== Koka interpreter ===" && $(RUN) sh -c "time ./src/pl01 $(BENCH_1) $(BENCH_1_ARGS)"
 	@echo "=== Koka PEG interpreter ===" && $(RUN) sh -c "time ./src/pl0peg1 $(BENCH_1) $(BENCH_1_ARGS)"
 
-src/pl0peg1: src/pl0peg1.koka src/peg.koka | .image
+src/pl0peg1: src/pl0peg1.koka src/peg.koka $(IMAGE_DEPS)
 	$(KOKA) -O3 --compile src/peg.koka 2>/dev/null
 	$(KOKA) -O3 -o src/pl0peg1 src/pl0peg1.koka 2>/dev/null
 	chmod +x src/pl0peg1
 
-src/pl01: src/pl01.koka src/pl01-types.koka src/pl01-parser.koka src/pl01-eval.koka | .image
+src/pl01: src/pl01.koka src/pl01-types.koka src/pl01-parser.koka src/pl01-eval.koka $(IMAGE_DEPS)
 	$(KOKA) -O3 -l src/pl01-types.koka 2>/dev/null
 	$(KOKA) -O3 -l src/pl01-parser.koka 2>/dev/null
 	$(KOKA) -O3 -l src/pl01-eval.koka 2>/dev/null
 	$(KOKA) -O3 -o src/pl01 src/pl01.koka 2>/dev/null
 	chmod +x src/pl01
 
-koka-pl0: | .image
+koka-pl0: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka -l src/pl01-types.koka && koka -l src/pl01-parser.koka && koka -l src/pl01-eval.koka && koka -e src/pl01.koka -- $(FILE)"
 
-koka-peg: | .image
+koka-peg: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/pl0peg1.koka -- examples/example_0.pl0"
 
-koka-peg0: | .image
+koka-peg0: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/pl0peg0.koka -- examples/example_0.pl0"
 
-koka-peg-test: | .image
+koka-peg-test: $(IMAGE_DEPS)
 	$(RUN) koka -e test/peg_test.koka
 
 # Test target: verify all examples across all interpreters/compilers
@@ -138,4 +183,14 @@ test: $(TARGET) $(TARGET_COMPILE) src/pl0_1_rt_bigint_stack.ll src/pl0peg1 src/p
 	echo ""; echo "Results: $$pass passed, $$fail failed"; \
 	[ $$fail -eq 0 ]'
 
-.PHONY: run run-llvm run-llvm-native clean bench-1 koka-pl0 koka-peg koka-peg0 koka-peg-test test
+# Help target
+help:
+	@echo "Build modes: auto (default), native, podman, docker"
+	@echo "Current: $(BUILD_MODE)"
+	@echo ""
+	@echo "Usage: make [BUILD_MODE=<mode>] [target]"
+	@echo "Targets: all, test, bench-1, clean, help"
+	@echo ""
+	@echo "Setup: . ./setup.sh  (or run ./setup.sh for info)"
+
+.PHONY: run run-llvm run-llvm-native clean bench-1 koka-pl0 koka-peg koka-peg0 koka-peg-test test help

@@ -17,11 +17,37 @@ Currently in an initial work-in-progress state.
 
 ## Setup
 
-The project uses a single Podman container (Fedora Rawhide) with all tools:
-- g++ (C++26)
-- LLVM/Clang
-- Koka
-- Boost (Multiprecision)
+### Quick Start
+
+**Source the setup script**
+```bash
+. ./setup.sh
+# or
+source ./setup.sh
+```
+This will:
+- Detect your system
+  - Linux (Fedora, Debian/Ubuntu), or macOS (mostly untested)
+- Install required tools (if needed), using sudo
+  - Requires g++ 14+, LLVM/Clang, Koka
+- **Automatically set BUILD_MODE for the current session**
+
+### Build Modes
+
+The project supports flexible build modes:
+- **Native**: Run builds directly on your system 
+- **Podman/Docker**: Use a container based on Fedora Rawhide to install tools
+
+The build system tries to auto-detects the best option.
+
+**Quick commands:**
+```bash
+make              # Auto-detect and build
+make test         # Run tests
+make BUILD_MODE=native    # Force native build
+make BUILD_MODE=podman    # Force Podman
+make help         # Show all options
+```
 
 Rebuild the container after changes to `Containerfile`:
 ```bash

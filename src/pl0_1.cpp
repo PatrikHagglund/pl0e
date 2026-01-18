@@ -25,7 +25,12 @@ template<typename T> std::string int_to_string(T v) {
     return neg ? "-" + s : s;
 }
 
-void print_int(Int v) { std::println("{}", int_to_string(v)); }
+void print_int(Int v) {
+    if constexpr (INT_BITS == 0)
+        v.str();  // bigint::print via str()
+    else
+        std::println("{}", int_to_string(v));
+}
 
 void exec(Stmt* s, Env& env) {
     if (auto* d = dynamic_cast<DeclStmt*>(s)) env.try_emplace(d->name, 0);

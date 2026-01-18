@@ -22,17 +22,18 @@ constexpr int INT_BITS = 0;
 // Number of built-in arg<N> variables (arg1, arg2, ..., argN)
 constexpr int ARG_COUNT = 2;
 
-#include <boost/multiprecision/cpp_int.hpp>
-namespace mp = boost::multiprecision;
+// Integer type selection
+#include "pl0_1_bigint.hpp"
 
 template<int Bits> struct IntType;
-template<> struct IntType<0>   { using type = mp::cpp_int; };
+template<> struct IntType<0>   { using type = bigint::Int<>; };  // bigint via header-only lib
 template<> struct IntType<32>  { using type = int32_t; };
 template<> struct IntType<64>  { using type = int64_t; };
 template<> struct IntType<128> { using type = __int128; };
-template<int Bits> requires (Bits > 128) struct IntType<Bits> { 
-    using type = mp::number<mp::cpp_int_backend<Bits, Bits, mp::signed_magnitude, mp::unchecked, void>>;
-};
+// For Bits > 128, use _BitInt (clang only)
+#if __has_builtin(__builtin_bit_cast)
+template<int Bits> requires (Bits > 128) struct IntType<Bits> { using type = _BitInt(Bits); };
+#endif
 
 using Int = typename IntType<INT_BITS>::type;
 

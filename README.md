@@ -29,7 +29,7 @@ This will:
 - Detect your system
   - Linux (Fedora, Debian/Ubuntu), or macOS (mostly untested)
 - Install required tools (if needed), using sudo
-  - Requires g++ 14+, LLVM/Clang, Koka
+  - Requires clang++ 18+, LLVM tools, Koka (optional)
 - **Automatically set BUILD_MODE for the current session**
 
 ### Build Modes
@@ -163,12 +163,12 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 
 | Implementation | Time |
 |----------------|------|
-| C++ backend | 18ms |
-| LLVM backend | 21ms |
-| LLVM lli (JIT) | 119ms |
-| C++ interpreter | 0.9s |
-| Koka interpreter | 2.1s |
-| Koka PEG interpreter | 2.8s |
+| C++ backend | 9ms |
+| LLVM backend | 27ms |
+| LLVM lli (JIT) | 90ms |
+| C++ interpreter | 0.6s |
+| Koka interpreter | 1.9s |
+| Koka PEG interpreter | 2.3s |
 
 ## Further Reading
 

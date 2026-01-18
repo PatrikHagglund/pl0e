@@ -44,8 +44,55 @@ auto collect_vars(std::vector<StmtPtr> &prog) {
 
 // C++ backend
 struct GenCpp {
-    int lbl = 0;
-    std::vector<int> ex;
+    int lbl = 0, tmp = 0;
+    std::vector<int> ex = {};
+    bool native_bigint = true;  // always use native for bigint (no Boost)
+
+    // For native: emit expression into a temp, return temp name
+    std::string en(Expr *x) {
+        if (auto *n = dynamic_cast<NumberExpr *>(x)) {
+            auto t = f("t{}", tmp++);
+            p("  alignas(8) char {}[BI_SIZE]; bigint::init(R({}), {});\n", t, t, n->val);
+            return t;
+        }
+        if (auto *v = dynamic_cast<VarExpr *>(x))
+            return v->name;
+        if (auto *u = dynamic_cast<NegExpr *>(x)) {
+            auto a = en(u->e.get()), t = f("t{}", tmp++);
+            p("  alignas(8) char {}[BI_SIZE]; bigint::neg(R({}), R({}));\n", t, t, a);
+            return t;
+        }
+        if (auto *b = dynamic_cast<BinExpr *>(x)) {
+            auto l = en(b->l.get()), r = en(b->r.get()), t = f("t{}", tmp++);
+            auto op = b->op == '+' ? "add" : "sub";
+            p("  alignas(8) char {}[BI_SIZE]; bigint::{}(R({}), R({}), R({}));\n", t, op, t, l, r);
+            return t;
+        }
+        return "t0";
+    }
+
+    void sn(Stmt *x, int d = 1) {
+        auto ind = [&] { for (int i = 0; i < d; i++) std::print("  "); };
+        if (auto *a = dynamic_cast<AssignStmt *>(x)) {
+            auto t = en(a->e.get());
+            ind(); p("bigint::copy(R({}), R({}));\n", a->name, t);
+        } else if (auto *b = dynamic_cast<BlockStmt *>(x)) {
+            for (auto &y : b->stmts) sn(y.get(), d);
+        } else if (auto *l = dynamic_cast<LoopStmt *>(x)) {
+            int z = lbl++;
+            ex.push_back(z);
+            ind(); p("for(;;) {{\n");
+            sn(l->body.get(), d + 1);
+            ind(); p("}} L{}:;\n", z);
+            ex.pop_back();
+        } else if (auto *b = dynamic_cast<BreakIfzStmt *>(x)) {
+            auto t = en(b->cond.get());
+            ind(); p("if (bigint::is_zero(R({}))) goto L{};\n", t, ex.back());
+        } else if (auto *pr = dynamic_cast<PrintStmt *>(x)) {
+            auto t = en(pr->e.get());
+            ind(); p("bigint::print(R({}));\n", t);
+        }
+    }
 
     std::string e(Expr *x) {
         if (auto *n = dynamic_cast<NumberExpr *>(x))
@@ -87,13 +134,25 @@ struct GenCpp {
 
     void gen(std::vector<StmtPtr> &prog) {
         auto vars = collect_vars(prog);
-        cpp_preamble();
-        p("int main(int argc, char** argv) {{\n");
-        for (auto &v : vars)
-            p("  Int {} = 0;\n", v);
-        emit_args_cpp();
-        for (auto &x : prog)
-            s(x.get());
+        cpp_preamble(native_bigint);
+        if (native_bigint && INT_BITS == 0) {
+            p("constexpr auto BI_SIZE = bigint::Raw::buf_size(64);\n");
+            p("template<class T> auto* R(T& x) {{ return reinterpret_cast<bigint::Raw*>(&x); }}\n");
+            p("int main(int argc, char** argv) {{\n");
+            for (auto &v : vars)
+                p("  alignas(8) char {}[BI_SIZE]; bigint::init(R({}), 0);\n", v, v);
+            for (int i = 1; i <= ARG_COUNT; ++i)
+                p("  alignas(8) char arg{0}[BI_SIZE]; bigint::init(R(arg{0}), 0); if (argc > {0}) bigint::from_str(R(arg{0}), argv[{0}]);\n", i);
+            for (auto &x : prog)
+                sn(x.get());
+        } else {
+            p("int main(int argc, char** argv) {{\n");
+            for (auto &v : vars)
+                p("  Int {};\n", v);
+            emit_args_cpp();
+            for (auto &x : prog)
+                s(x.get());
+        }
         p("}}\n");
     }
 };

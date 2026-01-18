@@ -56,14 +56,21 @@ entry:)", I, ret, dig);
 }
 
 // C++ preamble
-inline void cpp_preamble() {
-    std::print("#include <print>\n#include <boost/multiprecision/cpp_int.hpp>\n");
-    if constexpr (INT_BITS == 0)
-        std::print("using Int = boost::multiprecision::cpp_int;\n");
+inline void cpp_preamble(bool use_native_bigint = false) {
+    if ((use_native_bigint || true) && INT_BITS == 0) {  // always use native for bigint
+        std::print("#include \"pl0_1_bigint.hpp\"\n");
+        return;
+    }
+    std::print("#include <print>\n#include <cstdlib>\n");
+    if constexpr (INT_BITS <= 64)
+        std::print("using Int = int64_t;\n");
     else if constexpr (INT_BITS <= 128)
-        std::print("using Int = __int128;\nstd::string to_string(Int v) {{ if (!v) return \"0\"; std::string s; bool n = v < 0; if (n) v = -v; while (v) {{ s = char('0' + v % 10) + s; v /= 10; }} return n ? \"-\" + s : s; }}\n");
+        std::print("using Int = __int128;\n");
     else
-        std::print("using Int = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<{0}, {0}, boost::multiprecision::signed_magnitude, boost::multiprecision::unchecked, void>>;\n", INT_BITS);
+        std::print("using Int = _BitInt({});\n", INT_BITS);
+    // to_string for non-standard types
+    if constexpr (INT_BITS > 64)
+        std::print("std::string to_string(Int v) {{ if (!v) return \"0\"; std::string s; bool n = v < 0; if (n) v = -v; while (v) {{ s = char('0' + v % 10) + s; v /= 10; }} return n ? \"-\" + s : s; }}\n");
 }
 
 // Emit argument parsing
@@ -82,7 +89,5 @@ inline void emit_args_llvm_int(const std::string& I) {
 
 inline void emit_args_cpp() {
     for (int i = 1; i <= ARG_COUNT; ++i)
-        (INT_BITS > 0 && INT_BITS <= 128)
-            ? std::print("  Int arg{0} = argc > {0} ? std::atoll(argv[{0}]) : 0;\n", i)
-            : std::print("  Int arg{0} = argc > {0} ? Int(argv[{0}]) : Int(0);\n", i);
+        std::print("  Int arg{0} = argc > {0} ? std::atoll(argv[{0}]) : 0;\n", i);
 }

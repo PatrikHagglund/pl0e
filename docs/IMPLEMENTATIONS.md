@@ -11,14 +11,18 @@ Interpreters and compilers for PL/0 level 1.
 | `pl0_1.cpp` | C++ | Interpreter | 2 | Configurable |
 | `pl0_1_compile.cpp` | C++ | Compiler | 2 | Configurable |
 
+**Compiler requirement:** clang++ 18+ (uses `_BitInt` for INT_BITS > 128; g++ not supported).
+
 ## Language Implementation Configuration
 
 Configured in `src/pl0_1.hpp` (C++ implementations only):
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `INT_BITS` | 0 | Integer bit width (0=bigint, 32/64/128=native, >128=Boost fixed) |
+| `INT_BITS` | 0 | Integer bit width (0=bigint, 32/64/128=native, >128=_BitInt) |
 | `ARG_COUNT` | 2 | Number of built-in `arg<N>` variables (arg1, arg2, ...) |
+
+**Bigint implementation:** Custom header-only library (`pl0_1_bigint.hpp`) replaced Boost.Multiprecision for ~2x better performance in the C++ backend.
 
 ## Interpreters
 
@@ -75,19 +79,21 @@ Two backends from a single unified code generator:
 
 | Backend | Output | Bigint Support |
 |---------|--------|----------------|
-| C++ (default) | `.cpp` file | Via Boost headers |
+| C++ (default) | `.cpp` file | Header-only (`pl0_1_bigint.hpp`) |
 | LLVM IR (`--llvm`) | `.ll` file | Via `pl0_1_rt_bigint.ll` |
 
 ```
 src/
-  pl0_1_compile.cpp   — Unified code generator (112 lines)
+  pl0_1_compile.cpp   — Unified code generator
   pl0_1_preamble.hpp  — Runtime preambles for both backends
+  pl0_1_bigint.hpp    — Header-only bigint implementation
+  pl0_1_rt_bigint.cpp — LLVM runtime (extern C wrappers)
 ```
 
 **C++ backend:**
 ```bash
 ./pl0_1_compile prog.pl0 > out.cpp
-g++ -std=gnu++26 -O3 out.cpp -o out
+clang++ -std=c++26 -O3 -I src out.cpp -o out
 ```
 
 **LLVM backend:**
@@ -136,7 +142,7 @@ The `bi_assign()` function uses `realloc()` with exponential growth (capacity = 
 | `bi_add_size(ptr, ptr) → i32` | Limbs needed for a + b |
 | `bi_sub_size(ptr, ptr) → i32` | Limbs needed for a - b |
 | `bi_buf_size(i32) → i32` | Bytes needed for N limbs |
-| `bi_is_zero(ptr) → i32` | Test if zero |
+| `bi_is_zero(ptr) → i1` | Test if zero |
 | `bi_print(ptr)` | Print to stdout |
 | `bi_from_str(ptr, ptr)` | Parse string into buffer |
 
@@ -173,14 +179,14 @@ Example results for `2000 31` (bigint, INT_BITS=0):
 
 | Implementation | Time |
 |----------------|------|
-| C++ backend | 18ms |
-| LLVM backend | 21ms |
-| LLVM lli (JIT) | 119ms |
-| C++ interpreter | 0.9s |
-| Koka interpreter | 2.1s |
-| Koka PEG interpreter | 2.8s |
+| C++ backend | 9ms |
+| LLVM backend | 27ms |
+| LLVM lli (JIT) | 90ms |
+| C++ interpreter | 0.6s |
+| Koka interpreter | 1.9s |
+| Koka PEG interpreter | 2.3s |
 
-The LLVM backend performance is comparable to C++ backend. Memory management via `bi_assign()` with `realloc()` enables potential in-place buffer extension.
+The C++ backend is fastest due to header-only bigint with full inlining. Memory management via `bi_assign()` with `realloc()` enables potential in-place buffer extension.
 
 ## Code Style
 

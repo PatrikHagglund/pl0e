@@ -144,3 +144,20 @@ loop_stmt  = "loop" _ body:statement { Loop($body) }
 - Memoization available via `*-memo` functions
 - Inline actions evaluated during `peg-exec*` calls
 - Named captures collected from sequences for inline actions
+
+## Future Considerations
+
+**Fold syntax for repetition**: Currently, actions on `*` wrap all children in a constructor:
+```peg
+block = "{" _ (statement ";"? _)* "}" _ { Block }
+```
+
+A future extension could support explicit fold operations:
+```peg
+// Hypothetical syntax - not yet implemented
+block = "{" _ (statement ";"? _)*<Seq, Empty> "}" _
+```
+Where `*<cons, nil>` folds with `cons(item, acc)` starting from `nil`, building:
+`Seq(stmt1, Seq(stmt2, Seq(stmt3, Empty)))`
+
+This would enable incremental/recursive handling of repetitions without collecting all children first.

@@ -12,7 +12,7 @@
 program         = _ statement*
 statement       = binding / loop_stmt / break_stmt / print_stmt / block
 
-block           = "{" _ (statement ";"? _)* "}" _  @block
+block           = "{" _ (statement ";"? _)* "}" _ { Block }
 loop_stmt       = "loop" _ body:statement { Loop($body) }
 break_stmt      = "break_ifz" _ cond:expression { BreakIfz($cond) }
 print_stmt      = "print" _ e:expression { Print($e) }

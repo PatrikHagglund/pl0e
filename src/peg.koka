@@ -112,11 +112,15 @@ fun peg-suffix(): <parse,div> peg
   peg-ws()
   optional(p) {
     val op = one-of("*+?")
-    match op
+    val p1 = match op
       '*' -> PStar(p)
       '+' -> PPlus(p)
       '?' -> POpt(p)
       _ -> p
+    // Allow inline action after suffix operator
+    match peg-inline-action()
+      Just(act) -> PAction(p1, act)
+      Nothing -> p1
   }
 
 fun peg-prefix(): <parse,div> peg
@@ -664,7 +668,10 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       val (s1, caps, result) = peg-exec-match-with-caps(g, acts, def, p1, s)
       val txt = s.string.first(s.count - s1.count).string
       // Evaluate inline action with captures and text
-      val evaled = eval-iexpr(iact, txt, caps, def)
+      // For bare constructors like { Block }, pass result as single child
+      val evaled = match iact
+        ICons(tag, Nil) -> def("_cons", tag, [result], [])
+        _ -> eval-iexpr(iact, txt, caps, def)
       (s1, Captured(Nothing, evaled))
 
 // Match and collect captures (for inline actions)
@@ -681,6 +688,17 @@ fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: pe
       val caps = to-captures(children)
       val vs = to-values(children)
       (cur, caps, def("_seq", s.string.first(s.count - cur.count).string, vs, caps))
+    PStar(p1) ->
+      var cur := s
+      var vals := [Captured(Nothing, def("_nil", "", [], []))]
+      var done := False
+      while { !done } fn()
+        match peg-exec-try(g, acts, def, p1, cur)
+          Just((s1, v1)) -> { cur := s1; vals := Cons(v1, vals) }
+          Nothing -> done := True
+      val children = vals.reverse.drop(1)
+      val vs = to-values(children)
+      (cur, [], def("_list", "", vs, []))
     _ ->
       val (s1, v1) = peg-exec-match(g, acts, def, p, s)
       val caps = match v1.cname { Just(n) -> [(n, v1.cval)]; Nothing -> [] }

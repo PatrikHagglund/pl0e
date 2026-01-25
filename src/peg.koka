@@ -634,8 +634,14 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
 
     PPlus(p1) ->
       val (s1, v1) = peg-exec-match(g, acts, def, p1, s)
-      val (s2, _) = peg-exec-match(g, acts, def, PStar(p1), s1)
-      (s2, Captured(Nothing, def("_plus", s.string.first(s.count - s2.count).string, [v1.cval], [])))
+      var cur := s1
+      var vals := [v1]
+      while { peg-exec-try(g, acts, def, p1, cur).bool } fn()
+        match peg-exec-try(g, acts, def, p1, cur)
+          Just((s2, v2)) -> { cur := s2; vals := Cons(v2, vals) }
+          Nothing -> ()
+      val children = vals.reverse
+      (cur, Captured(Nothing, def("_plus", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children))))
 
     POpt(p1) ->
       match peg-exec-try(g, acts, def, p1, s)

@@ -102,22 +102,24 @@ src/e1_rt_bigint.ll: src/e1_rt_bigint.cpp $(IMAGE_DEPS)
 	$(RUN) clang++ $(CXXSTD) -Wno-vla-cxx-extension -S -emit-llvm $(OPT_LLVM_IR) $< -o $@
 
 clean:
-	rm -rf $(TARGET) $(TARGET_COMPILE) out.ll out out.cpp out-O0 src/.koka src/e1peg src/e1
+	rm -rf $(TARGET) $(TARGET_COMPILE) out.ll out out.cpp out-O0 src/.koka src/e1peg src/e1 src/e2peg
 
-BENCH_1 = examples/factorial.e1
-BENCH_1_ITERS = 2000
-BENCH_1_N = 31
-BENCH_1_ARGS = $(BENCH_1_ITERS) $(BENCH_1_N)
+BENCH_ITERS = 2000
+BENCH_N = 31
+BENCH_ARGS = $(BENCH_ITERS) $(BENCH_N)
 
-bench-1: $(TARGET) $(TARGET_COMPILE) src/e1_rt_bigint.ll src/e1peg src/e1
-	@$(RUN) sh -c "./$(TARGET_COMPILE) $(BENCH_1) > out.cpp && $(CLANGXX_OUT) out.cpp -o out_cpp"
-	@echo "=== C++ backend ===" && $(RUN) sh -c "time ./out_cpp $(BENCH_1_ARGS)"
-	@$(RUN) sh -c "./$(TARGET_COMPILE) --llvm $(BENCH_1) > /tmp/prog.ll && $(LLVM_LINK)"
-	@echo "=== LLVM backend ===" && $(RUN) sh -c "$(CLANG_LL) out.ll -o out && time ./out $(BENCH_1_ARGS)"
-	@echo "=== LLVM lli (JIT) ===" && $(RUN) sh -c "time lli out.ll $(BENCH_1_ARGS)" || true
-	@echo "=== C++ interpreter ===" && $(RUN) sh -c "time ./$(TARGET) $(BENCH_1) $(BENCH_1_ARGS)"
-	@echo "=== Koka interpreter ===" && $(RUN) sh -c "time ./src/e1 $(BENCH_1) $(BENCH_1_ARGS)"
-	@echo "=== Koka PEG interpreter ===" && $(RUN) sh -c "time ./src/e1peg $(BENCH_1) $(BENCH_1_ARGS)"
+bench: $(TARGET) $(TARGET_COMPILE) src/e1_rt_bigint.ll src/e1peg src/e1 src/e2peg
+	@$(RUN) sh -c "./$(TARGET_COMPILE) examples/factorial.e1 > out.cpp && $(CLANGXX_OUT) out.cpp -o out_cpp"
+	@echo "=== C++ backend ===" && $(RUN) sh -c "time ./out_cpp $(BENCH_ARGS)"
+	@$(RUN) sh -c "./$(TARGET_COMPILE) --llvm examples/factorial.e1 > /tmp/prog.ll && $(LLVM_LINK)"
+	@echo "=== LLVM backend ===" && $(RUN) sh -c "$(CLANG_LL) out.ll -o out && time ./out $(BENCH_ARGS)"
+	@echo "=== LLVM lli (JIT) ===" && $(RUN) sh -c "time lli out.ll $(BENCH_ARGS)" || true
+	@echo "=== C++ interpreter ===" && $(RUN) sh -c "time ./$(TARGET) examples/factorial.e1 $(BENCH_ARGS)"
+	@echo "=== Koka interpreter ===" && $(RUN) sh -c "time ./src/e1 examples/factorial.e1 $(BENCH_ARGS)"
+	@echo "=== Koka PEG e1 ===" && $(RUN) sh -c "time ./src/e1peg examples/factorial.e1 $(BENCH_ARGS)"
+	@echo "=== Koka PEG e2 ===" && $(RUN) sh -c "time ./src/e2peg examples/factorial.e2 $(BENCH_ARGS)"
+
+bench-1: bench
 
 # Benchmark comparing INT_BITS settings (no Koka)
 # For INT_BITS=0, also tests different LIMB_BITS values
@@ -168,6 +170,14 @@ koka-pl0: $(IMAGE_DEPS)
 
 koka-peg: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e1peg.koka -- examples/example.e0"
+
+koka-peg2: $(IMAGE_DEPS)
+	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e2peg.koka -- examples/example.e2"
+
+src/e2peg: src/e2peg.koka src/peg.koka $(IMAGE_DEPS)
+	$(KOKA) $(KOKA_OPT) --compile src/peg.koka 2>/dev/null
+	$(KOKA) $(KOKA_OPT) -o src/e2peg src/e2peg.koka 2>/dev/null
+	chmod +x src/e2peg
 
 koka-peg0: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e0peg.koka -- examples/example.e0"

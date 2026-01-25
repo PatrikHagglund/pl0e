@@ -1,15 +1,16 @@
 # PL/0 Implementations
 
-Interpreters and compilers for e1.
+Interpreters and compilers for e1 and e2.
 
 ## Overview
 
-| Implementation | Language | Type | Integer Support |
-|----------------|----------|------|-----------------|
-| `e1.koka` | Koka | Interpreter | Koka bigint |
-| `e1peg.koka` | Koka | Interpreter | Koka bigint |
-| `e1.cpp` | C++ | Interpreter | Configurable |
-| `e1_compile.cpp` | C++ | Compiler | Configurable |
+| Implementation | Language | Type | Level | Integer Support |
+|----------------|----------|------|-------|-----------------|
+| `e1.koka` | Koka | Interpreter | e1 | Koka bigint |
+| `e1peg.koka` | Koka | Interpreter | e1 | Koka bigint |
+| `e2peg.koka` | Koka | Interpreter | e2 | Koka bigint |
+| `e1.cpp` | C++ | Interpreter | e1 | Configurable |
+| `e1_compile.cpp` | C++ | Compiler | e1 | Configurable |
 
 **Compiler requirement:** clang++ 18+ (uses `_BitInt`; g++ not supported).
 
@@ -24,11 +25,18 @@ Traditional parse-then-execute with AST.
 make koka-pl0
 ```
 
-**`e1peg.koka` — Single-Phase:**
+**`e1peg.koka` — Single-Phase (e1):**
 No AST — semantic actions during parsing produce thunks. Uses packrat memoization.
 
 ```bash
 make koka-peg
+```
+
+**`e2peg.koka` — Single-Phase (e2):**
+Extends e1peg with case statements, comparisons, and multiplication/division.
+
+```bash
+make koka-peg2
 ```
 
 Both use algebraic effects for `break`:
@@ -173,30 +181,32 @@ src/
   e1_preamble.hpp  — Runtime preambles (macros for both backends)
   e1_bigint.hpp    — Bigint implementation
   e1_rt_bigint.cpp — LLVM runtime wrappers
-  e1*.koka          — Koka interpreter
-  e1peg.koka        — Koka PEG interpreter
-  peg.koka            — Generic PEG parser
+  e1.koka          — Koka interpreter (e1)
+  e1peg.koka       — Koka PEG interpreter (e1)
+  e2peg.koka       — Koka PEG interpreter (e2)
+  peg.koka         — Generic PEG parser
 ```
 
 ## Benchmarks
 
 ```bash
-make bench-1                        # 2000 iterations of 31!
-make bench-1 BENCH_1_ARGS="100 20"  # custom
+make bench                        # 2000 iterations of 31!
+make bench BENCH_ARGS="100 20"    # custom
 ```
 
 Results for `2000 31` (bigint):
 
 | Implementation | Time |
 |----------------|------|
-| C++ backend | 16ms |
-| LLVM backend | 15ms |
-| LLVM JIT | 89ms |
-| C++ interpreter | 0.72s |
+| C++ backend | 17ms |
+| LLVM backend | 3ms |
+| LLVM JIT | 86ms |
+| C++ interpreter | 0.59s |
+| Koka PEG e2 | 1.1s |
 | Koka interpreter | 2.1s |
-| Koka PEG | 2.5s |
+| Koka PEG e1 | 2.4s |
 
-C++ and LLVM backends have similar performance when compiled to native.
+The e2 PEG interpreter is ~2× faster than e1 PEG for factorial because e2 has native multiplication while e1 must emulate it with nested loops.
 
 ## Code Style
 

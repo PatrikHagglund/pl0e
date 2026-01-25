@@ -1,42 +1,48 @@
-// PL/0 Simplified Grammar (PEG variant)
+// PL/0 Level 2 Grammar (PEG variant)
 //
-// Integer-only, no callables, no case expression
+// Adds over e1: case statements, unconditional break, blocks, comparisons, mul/div/mod
 
-// Program structure
-program         = _ top_level_stmt*
-top_level_stmt  = binding / block / expression
+program         = _ statement*
+statement       = binding / case_stmt / loop_stmt / break_stmt / print_stmt / block
 
-// Statements
-statement       = control / print_stmt / top_level_stmt
-control         = case_stmt / loop_stmt / "break" _
-block           = "{" _ (statement ";"? _)* "}" _
-case_stmt       = "case" _ "{" _ stmt_arm+ "}" _
-stmt_arm        = expression "->" _ statement
-loop_stmt       = "loop" _ statement
-print_stmt      = "print" _ expression
+block           = "{" _ (statement ";"? _)* "}" _ { Block }
+loop_stmt       = "loop" _ body:statement { Loop($body) }
+break_stmt      = "break" _ { Break }
+print_stmt      = "print" _ e:expression { Print($e) }
+case_stmt       = "case" _ "{" _ stmt_arm+ "}" _ { Case }
+stmt_arm        = cond:expression "->" _ body:statement { Arm($cond, $body) }
 
-// Bindings
-binding         = ident _ ":=" _ expression
-                / ident _ ":"
+binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
+                / id:ident _ ":" { Decl($id) }
 
-// Expressions — standard precedence
 expression      = cmp_expr
-cmp_expr        = sum_expr (relop sum_expr)?
-sum_expr        = product (("+" / "-") _ product)*
-product         = unary (("*" / "/" / "%") _ unary)*
-unary           = "-"? atom
-atom            = int_lit / ident / "(" _ expression ")" _
+cmp_expr        = l:sum_expr "==" _ r:sum_expr { Eq($l, $r) }
+                / l:sum_expr "!=" _ r:sum_expr { Ne($l, $r) }
+                / l:sum_expr "<=" _ r:sum_expr { Le($l, $r) }
+                / l:sum_expr ">=" _ r:sum_expr { Ge($l, $r) }
+                / l:sum_expr "<" _ r:sum_expr { Lt($l, $r) }
+                / l:sum_expr ">" _ r:sum_expr { Gt($l, $r) }
+                / sum_expr
+sum_expr        = l:product "+" _ r:sum_expr { Add($l, $r) }
+                / l:product "-" _ r:sum_expr { Sub($l, $r) }
+                / product
+product         = l:unary "*" _ r:product { Mul($l, $r) }
+                / l:unary "/" _ r:product { Div($l, $r) }
+                / l:unary "%" _ r:product { Mod($l, $r) }
+                / unary
+unary           = "-" _ e:atom { Neg($e) }
+                / atom
+atom            = int_lit
+                / id:ident { Var($id) }
+                / "(" _ e:expression ")" _ { $e }
 
-relop           = ("==" / "!=" / "<=" / ">=" / "<" / ">") _
-int_lit         = digit+ _
+int_lit         = digit+ _ { Int($0) }
 
-// Lexical elements
 keyword         = ("case" / "loop" / "break" / "print") !idchar
-ident           = !keyword letter idchar* _
+ident           = !keyword letter idchar* _ { Ident($0) }
 idchar          = [a-zA-Z0-9_]
 letter          = [a-zA-Z]
 digit           = [0-9]
 
-// Whitespace and comments
 _               = ([ \t\n\r] / comment)*
 comment         = "//" [^\n]* / "/*" (!"*/" .)* "*/"

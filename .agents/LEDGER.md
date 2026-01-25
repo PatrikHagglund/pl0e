@@ -30,6 +30,12 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - Other levels (e2 through e6) have PEG grammars and examples but no interpreters
 
 ## Next
+- Restructure directories by language level (e0/, e1/, e2/, ... + shared/)
+  - Each level gets its own directory with grammar, implementations, examples, docs
+  - Shared code (peg.koka, bigint runtime) in shared/
+  - Pros: clear ownership, easier to add levels, level-specific docs with code
+  - Cons: more directories, Makefile complexity
+  - Consider hybrid: keep src/ flat, split examples by level
 - Add memoization to PEG semantic-action mode (thread memo table through peg-exec-match)
 - Support for "syntactic sugar"?
 - Explore papers about efficient interpreters.
@@ -45,9 +51,16 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 ## Now
 
 ### Working set (current focus only; replace/prune as "Now" changes)
-- `LEDGER.md`
+- `src/e2peg.koka` — e2 interpreter (done)
+- `src/e2.peg` — e2 grammar with inline actions (done)
 
 ## Done (prune when exceeding 30 items)
+- Created e2peg.koka interpreter with case/break/comparison/mul-div support
+- Added inline actions to e2.peg grammar
+- Fixed PPlus in peg.koka to collect all children (was only keeping first)
+- Added Makefile targets: koka-peg2, src/e2peg, bench (renamed from bench-1)
+- Created e2 examples: factorial.e2, gcd.e2, collatz.e2
+- Updated README.md and docs/IMPLEMENTATIONS.md with e2 info
 - Renamed pl0_N languages to eN ("e" for experiment/exploration)
   - Renamed all files: .peg, .cpp, .hpp, .koka, docs
   - Updated all references in docs, examples, and source

@@ -13,8 +13,9 @@ The "e" in e0–e6 may stand for "experiment" or "exploration".
 
 **Current state:**
 - e1 (and e0) have two different working interpreters written in Koka, one in C++, and a compiler in C++ targeting LLVM IR.
-- Benchmarks for level 1
-- e2 through e6 have PEG grammars and example files, but no interpreters yet
+- e2 has a working Koka PEG interpreter
+- Benchmarks for levels 1 and 2
+- e3 through e6 have PEG grammars and example files, but no interpreters yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
 
 ## Quick Start
@@ -30,8 +31,9 @@ make help         # Show all options
 
 **Run implementations:**
 ```bash
-make koka-pl0       # Koka interpreter
-make koka-peg       # Koka PEG interpreter
+make koka-pl0       # Koka interpreter (e1)
+make koka-peg       # Koka PEG interpreter (e1)
+make koka-peg2      # Koka PEG interpreter (e2)
 make run            # C++ interpreter
 make run-compile    # C++ compiler (C++ backend)
 make run-llvm       # C++ compiler (LLVM JIT)
@@ -49,7 +51,7 @@ Installs Clang/LLVM and Koka on Linux (Fedora, Debian/Ubuntu) or macOS.
 |---------|-------|----------|
 | e0 | ℤ | sequential only, + - (not Turing-complete) |
 | e1 | ℤ | + loop, break_ifz (Turing-complete, Minsky machine) |
-| e2 | ℤ | + case statements, break, blocks |
+| e2 | ℤ | + case statements, break, blocks, comparisons, `*` `/` `%` |
 | e3 | ℤ, 𝔹, () → T | + booleans, callables, case expressions |
 | e4 | ℤ, 𝔹, [T], () → T | + arrays, pattern matching |
 | e5 | ℤ, 𝔹, [T], {…}, () → T, unit | + records, unit literal |
@@ -61,9 +63,12 @@ Each level is a strict superset of the previous.
 
 - [example.e0](examples/example.e0) — Sequential computation (e0)
 - [example.e1](examples/example.e1) — Emulating e2 features in e1
-- [factorial.e1](examples/factorial.e1) — Factorial benchmark
-- [collatz.e1](examples/collatz.e1) — Collatz sequence iteration
-- [gcd.e1](examples/gcd.e1) — Euclidean algorithm (GCD)
+- [factorial.e1](examples/factorial.e1) — Factorial benchmark (e1)
+- [collatz.e1](examples/collatz.e1) — Collatz sequence iteration (e1)
+- [gcd.e1](examples/gcd.e1) — Euclidean algorithm (e1)
+- [factorial.e2](examples/factorial.e2) — Factorial benchmark (e2)
+- [collatz.e2](examples/collatz.e2) — Collatz sequence (e2)
+- [gcd.e2](examples/gcd.e2) — Euclidean algorithm (e2)
 
 ## Implementations
 
@@ -71,6 +76,7 @@ Each level is a strict superset of the previous.
 |----------|-------|-------|
 | Koka (hand-written parser) | `e1.koka` | AST used|
 | Koka (PEG meta-interpreter) | `peg.koka`, `e1peg.koka` | Single-phase parse+execute, no AST |
+| Koka (PEG, e2) | `peg.koka`, `e2peg.koka` | e2 with case/comparisons/mul-div |
 | C++ interpreter | `e1.cpp`, `e1.hpp` | Handwritten, AST used |
 | Compiler in C++ | `e1_compile.cpp`, `e1.hpp` | C++ or LLVM IR backend |
 
@@ -79,20 +85,21 @@ See [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) for details on each imple
 ## Benchmarks
 
 ```bash
-make bench-1                           # default: 2000 iterations of 31!
-make bench-1 BENCH_1_ARGS="100 20"     # custom: 100 iterations of 20!
+make bench                         # default: 2000 iterations of 31!
+make bench BENCH_ARGS="100 20"     # custom: 100 iterations of 20!
 ```
 
 Example results for `2000 31` (with bigint, INT_BITS=0):
 
 | Implementation | Time |
 |----------------|------|
-| C++ backend | 16ms |
-| LLVM backend | 15ms |
-| LLVM lli (JIT) | 87ms |
-| C++ interpreter | 0.73s |
+| C++ backend | 17ms |
+| LLVM backend | 3ms |
+| LLVM lli (JIT) | 86ms |
+| C++ interpreter | 0.59s |
+| Koka PEG e2 | 1.1s |
 | Koka interpreter | 2.1s |
-| Koka PEG interpreter | 2.5s |
+| Koka PEG e1 | 2.4s |
 
 ## Further Reading
 

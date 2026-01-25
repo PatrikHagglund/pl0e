@@ -87,7 +87,7 @@ fun default-action(name: string, txt: string, children: list<semval>, caps: capt
   elif name == "_str" then
     SVIdent(txt)
   elif name == "_cons" then
-    // Constructor: Assign, Decl, etc.
+    // Constructor: Assign, Decl, Int, Ident, etc.
     match txt
       "Assign" -> match children
         Cons(SVIdent(id), Cons(SVExpr(f), _)) -> SVStmt(fn(e) env-set(e, id, f(e)))
@@ -95,6 +95,14 @@ fun default-action(name: string, txt: string, children: list<semval>, caps: capt
       "Decl" -> match children
         Cons(SVIdent(id), _) -> SVStmt(fn(e) env-set(e, id, 0))
         _ -> SVList(children)
+      "Int" -> match children
+        Cons(SVIdent(s), _) ->
+          val n = s.list.take-while(fn(c) c.is-digit).string.parse-int.default(0)
+          SVExpr(fn(_) n)
+        _ -> SVExpr(fn(_) 0)
+      "Ident" -> match children
+        Cons(SVIdent(s), _) -> SVIdent(s.list.take-while(fn(c) c.is-alpha || c.is-digit || c == '_').string)
+        _ -> SVIdent("")
       "Expr" -> match children
         Cons(c, _) -> c
         _ -> SVList(children)
@@ -316,8 +324,7 @@ fun act-op(name: string, txt: string, children: list<semval>, caps: captures<sem
 // Build the action table
 fun pl0-actions(): actions<semval>
   [
-    ("int_lit", act-int-lit),
-    ("ident", act-ident),
+    // int_lit and ident now use inline actions { Int($n) } / { Ident($id) }
     ("atom", act-atom),
     ("unary", act-unary),
     ("sum_expr", act-sum-expr),

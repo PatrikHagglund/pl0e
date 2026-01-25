@@ -28,11 +28,11 @@ sum_expr        = unary (("+" / "-") _ unary)*  @sum_expr
 unary           = "-"? atom  @unary
 atom            = int_lit / ident / "(" _ expression ")" _  @atom
 
-int_lit         = digit+ _  @int_lit
+int_lit         = digit+ _ { Int($0) }
 
 // Lexical elements
 keyword         = ("loop" / "break_ifz" / "print") !idchar
-ident           = !keyword letter idchar* _  @ident
+ident           = !keyword letter idchar* _ { Ident($0) }
 idchar          = [a-zA-Z0-9_]
 letter          = [a-zA-Z]
 digit           = [0-9]

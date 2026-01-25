@@ -25,29 +25,6 @@ pub type semval
   SVList(vs: list<semval>)
   SVArm(cond: (env) -> <div> int, body: (env) -> <div,console,loop-break> env)
 
-fun sv-eval(v: semval, e: env): <div> int
-  match v
-    SVExpr(f) -> f(e)
-    SVList(Cons(x, _)) -> sv-eval(x, e)
-    _ -> 0
-
-fun sv-exec(v: semval, e: env): <div,console,loop-break> env
-  match v
-    SVStmt(f) -> f(e)
-    SVList(Cons(x, _)) -> sv-exec(x, e)
-    _ -> e
-
-fun sv-ident(v: semval): string
-  match v
-    SVIdent(s) -> s
-    SVList(Cons(x, _)) -> sv-ident(x)
-    _ -> ""
-
-fun sv-list(v: semval): list<semval>
-  match v
-    SVList(vs) -> vs
-    _ -> []
-
 pub effect loop-break
   ctl do-break(e: env): a
 
@@ -138,14 +115,17 @@ fun extract-arms(vs: list<semval>): list<((env) -> <div> int, (env) -> <div,cons
       SVArm(cond, body) -> Just((cond, body))
       _ -> Nothing
 
-fun pl0-actions(): actions<semval>
+fun actions(): actions<semval>
   []
 
 fun exec-safe(v: semval, e: env): <div, console> env
   with ctl do-break(e1)
     println("Error: 'break' used outside of loop")
     e1
-  sv-exec(v, e)
+  match v
+    SVStmt(f) -> f(e)
+    SVList(Cons(x, _)) -> exec-safe(x, e)
+    _ -> e
 
 pub fun main()
   val args = get-args()
@@ -161,15 +141,15 @@ pub fun main()
   var input := prog.slice
   var current-env: env := [("arg1", arg1-val), ("arg2", arg2-val)]
 
-  match peg-exec-partial(g, pl0-actions(), default-action, "_", input)
+  match peg-exec-partial(g, actions(), default-action, "_", input)
     Just((rest, _)) -> input := rest
     Nothing -> ()
 
   while { !input.is-empty }
-    match peg-exec-partial(g, pl0-actions(), default-action, "statement", input)
+    match peg-exec-partial(g, actions(), default-action, "statement", input)
       Just((rest, sv)) ->
         current-env := exec-safe(sv, current-env)
-        match peg-exec-partial(g, pl0-actions(), default-action, "_", rest)
+        match peg-exec-partial(g, actions(), default-action, "_", rest)
           Just((rest2, _)) -> input := rest2
           Nothing -> input := rest
       Nothing ->

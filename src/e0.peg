@@ -4,17 +4,28 @@
 //   1. Increment/decrement - + and - operations
 //   2. Variables - unbounded integer storage (counters)
 //   MISSING: Conditional control flow (no loop, no zero-test)
-//
-// Action tags (@tag) map rules to semantic actions.
+
 program    = _ statement*
-statement  = binding / print_stmt  @statement
-binding    = ident _ ":=" _ expression  @binding
-print_stmt = "print" _ expression  @print_stmt
-expression = term (("+" / "-") _ term)*  @expression
-term       = int_lit / ident  @term
-int_lit    = digit+ _  @int_lit
-ident      = letter idchar* _  @ident
+statement  = binding / print_stmt
+
+binding    = id:ident _ ":=" _ e:expression { Assign($id, $e) }
+print_stmt = "print" _ e:expression { Print($e) }
+
+expression = sum_expr
+sum_expr   = l:unary "+" _ r:sum_expr { Add($l, $r) }
+           / l:unary "-" _ r:sum_expr { Sub($l, $r) }
+           / unary
+unary      = "-" _ e:atom { Neg($e) }
+           / atom
+atom       = int_lit
+           / id:ident { Var($id) }
+           / "(" _ e:expression ")" _ { $e }
+
+int_lit    = digit+ _ { Int($0) }
+ident      = letter idchar* _ { Ident($0) }
 idchar     = [a-zA-Z0-9_]
 letter     = [a-zA-Z]
 digit      = [0-9]
-_          = ([ \t\n\r] / "//" [^\n]*)*
+
+_          = ([ \t\n\r] / comment)*
+comment    = "//" [^\n]* / "/*" (!"*/" .)* "*/"

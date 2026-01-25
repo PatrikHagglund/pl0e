@@ -9,7 +9,6 @@ import std/os/file
 import std/os/path
 import std/os/env
 
-// === Environment ===
 pub alias env = list<(string, int)>
 
 pub fun env-get(e: env, key: string): int
@@ -20,97 +19,84 @@ pub fun env-get(e: env, key: string): int
 fun env-set(e: env, key: string, v: int): env
   Cons((key, v), e.filter(fn(p) p.fst != key))
 
-// === Semantic Values (Thunks) ===
 pub type semval
-  SVExpr(f: (env) -> div int)
+  SVExpr(f: (env) -> <div> int)
   SVStmt(f: (env) -> <div,console> env)
   SVIdent(s: string)
-  SVOp(op: string)
   SVList(vs: list<semval>)
 
-// Flatten SVList wrappers
-fun flatten-sv(vs: list<semval>): list<semval>
-  vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
-    .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
-    .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
+fun default-action(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
+  if name == "_text" then SVIdent(txt)
+  elif name == "_int" || name == "int" then
+    val n = txt.list.take-while(fn(c) c.is-digit || c == '-').string.parse-int.default(0)
+    SVExpr(fn(_) n)
+  elif name == "_str" then SVIdent(txt)
+  elif name == "_cons" then
+    match txt
+      "Assign" -> match children
+        Cons(SVIdent(id), Cons(SVExpr(f), _)) -> SVStmt(fn(e) env-set(e, id, f(e)))
+        _ -> SVList(children)
+      "Int" -> match children
+        Cons(SVIdent(s), _) ->
+          val n = s.list.take-while(fn(c) c.is-digit).string.parse-int.default(0)
+          SVExpr(fn(_) n)
+        _ -> SVExpr(fn(_) 0)
+      "Ident" -> match children
+        Cons(SVIdent(s), _) -> SVIdent(s.list.take-while(fn(c) c.is-alpha || c.is-digit || c == '_').string)
+        _ -> SVIdent("")
+      "Print" -> match children
+        Cons(SVExpr(f), _) -> SVStmt(fn(e) { println(f(e).show); e })
+        _ -> SVStmt(fn(e) e)
+      "Var" -> match children
+        Cons(SVIdent(id), _) -> SVExpr(fn(e) env-get(e, id))
+        _ -> SVExpr(fn(_) 0)
+      "Add" -> match children
+        Cons(SVExpr(l), Cons(SVExpr(r), _)) -> SVExpr(fn(e) l(e) + r(e))
+        _ -> SVExpr(fn(_) 0)
+      "Sub" -> match children
+        Cons(SVExpr(l), Cons(SVExpr(r), _)) -> SVExpr(fn(e) l(e) - r(e))
+        _ -> SVExpr(fn(_) 0)
+      "Neg" -> match children
+        Cons(SVExpr(f), _) -> SVExpr(fn(e) 0 - f(e))
+        _ -> SVExpr(fn(_) 0)
+      _ -> SVList(children)
+  elif name == "_lit" then SVList(children)
+  else match children
+    Cons(c, Nil) -> c
+    _ -> SVList(children)
 
-// === Semantic Actions ===
-fun default-action(name: string, txt: string, children: list<semval>): semval
-  if name == "_lit" && (txt.trim == "+" || txt.trim == "-")
-  then SVOp(txt.trim)
-  else match children { Cons(c, Nil) -> c; _ -> SVList(children) }
+fun actions(): actions<semval>
+  []
 
-fun act-int-lit(name: string, txt: string, children: list<semval>): semval
-  val digits = txt.list.take-while(fn(c) c.is-digit).string
-  SVExpr(fn(_) digits.parse-int.default(0))
+fun exec-safe(v: semval, e: env): <div, console> env
+  match v
+    SVStmt(f) -> f(e)
+    SVList(Cons(x, _)) -> exec-safe(x, e)
+    _ -> e
 
-fun act-ident(name: string, txt: string, children: list<semval>): semval
-  val id = txt.list.take-while(fn(c) c.is-alpha || c.is-digit || c == '_').string
-  SVIdent(id)
-
-fun act-term(name: string, txt: string, children: list<semval>): semval
-  match flatten-sv(children).filter(fn(c) match c { SVExpr(_) -> True; SVIdent(_) -> True; _ -> False }).head
-    Just(SVExpr(f)) -> SVExpr(f)
-    Just(SVIdent(id)) -> SVExpr(fn(e) env-get(e, id))
-    _ -> SVExpr(fn(_) 0)
-
-fun act-expression(name: string, txt: string, children: list<semval>): semval
-  val cs = flatten-sv(children)
-  val exprs = cs.filter-map(fn(c) match c { SVExpr(f) -> Just(f); _ -> Nothing })
-  val ops = cs.filter-map(fn(c) match c { SVOp(o) -> Just(o); _ -> Nothing })
-  match exprs
-    Cons(first, rest) -> SVExpr fn(e)
-      zip(rest, ops).foldl(first(e)) fn(acc, p)
-        if tuple2/snd(p) == "-" then acc - tuple2/fst(p)(e) else acc + tuple2/fst(p)(e)
-    _ -> SVExpr(fn(_) 0)
-
-fun act-binding(name: string, txt: string, children: list<semval>): semval
-  val cs = flatten-sv(children)
-  val id = cs.filter-map(fn(c) match c { SVIdent(s) -> Just(s); _ -> Nothing }).head.default("")
-  val f = cs.filter-map(fn(c) match c { SVExpr(f) -> Just(f); _ -> Nothing }).head.default(fn(_) 0)
-  SVStmt(fn(e) env-set(e, id, f(e)))
-
-fun act-print(name: string, txt: string, children: list<semval>): semval
-  val f = flatten-sv(children).filter-map(fn(c) match c { SVExpr(f) -> Just(f); _ -> Nothing }).head.default(fn(_) 0)
-  SVStmt(fn(e) { println(f(e).show); e })
-
-fun act-statement(name: string, txt: string, children: list<semval>): semval
-  flatten-sv(children).filter(fn(c) match c { SVStmt(_) -> True; _ -> False }).head.default(SVStmt(fn(e) e))
-
-fun pl0-actions(): actions<semval>
-  [("int_lit", act-int-lit), ("ident", act-ident), ("term", act-term),
-   ("expression", act-expression), ("binding", act-binding),
-   ("print_stmt", act-print), ("statement", act-statement)]
-
-// === Main ===
 pub fun main()
   val args = get-args()
-  val prog-path = args.head.default("../examples/example_0.pl0")
+  val prog-path = match args { Cons(p, _) -> p; Nil -> "examples/example.e0" }
   val arg1-val = match args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
   val arg2-val = match args { Cons(_, Cons(_, Cons(n, _))) -> n.parse-int.default(0); _ -> 0 }
 
-  "Starting (direct execution, no AST)...".println
   val grammar-text = read-text-file("src/e0.peg".path)
-  ("Grammar file read: " ++ grammar-text.count.int/show ++ " chars").println
   val g = parse-peg(grammar-text)
-  println("Grammar loaded: " ++ g.length.int/show ++ " rules")
-
   val prog = read-text-file(prog-path.path)
-  println("Program loaded (" ++ prog.count.int/show ++ " chars): " ++ prog-path)
+  println("e0: " ++ prog-path ++ " (" ++ prog.count.int/show ++ " chars)")
 
-  val acts = pl0-actions()
   var input := prog.slice
   var current-env: env := [("arg1", arg1-val), ("arg2", arg2-val)]
 
-  match peg-exec-partial(g, acts, default-action, "_", input)
+  match peg-exec-partial(g, actions(), default-action, "_", input)
     Just((rest, _)) -> input := rest
     Nothing -> ()
 
   while { !input.is-empty }
-    match peg-exec-partial(g, acts, default-action, "statement", input)
+    match peg-exec-partial(g, actions(), default-action, "statement", input)
       Just((rest, sv)) ->
-        match sv { SVStmt(f) -> current-env := f(current-env); _ -> () }
-        match peg-exec-partial(g, acts, default-action, "_", rest)
+        current-env := exec-safe(sv, current-env)
+        match peg-exec-partial(g, actions(), default-action, "_", rest)
           Just((rest2, _)) -> input := rest2
           Nothing -> input := rest
       Nothing ->

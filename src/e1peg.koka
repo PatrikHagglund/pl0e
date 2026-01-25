@@ -8,7 +8,6 @@ import std/os/file
 import std/os/path
 import std/os/env
 
-// === Environment ===
 pub alias env = list<(string, int)>
 
 pub fun env-get(e: env, key: string): int
@@ -19,68 +18,22 @@ pub fun env-get(e: env, key: string): int
 fun env-set(e: env, key: string, v: int): env
   Cons((key, v), e.filter(fn(p) p.fst != key))
 
-// === Semantic Values (Thunks) ===
-// Instead of building an AST, we build closures that compute values
-// This enables true single-phase: parse and compute in one pass
-//
-// - Expressions: fn(env) -> int
-// - Statements:  fn(env) -> env
-// - The closures capture the parsed structure directly
-
 pub type semval
-  SVExpr(f: (env) -> <div> int)      // Deferred expression evaluation
-  SVStmt(f: (env) -> <div,console,loop-break> env)  // Deferred statement execution
-  SVIdent(s: string)                 // Identifier (for bindings)
-  SVList(vs: list<semval>)           // Sequence
+  SVExpr(f: (env) -> <div> int)
+  SVStmt(f: (env) -> <div,console,loop-break> env)
+  SVIdent(s: string)
+  SVList(vs: list<semval>)
 
-// Extract an expression thunk, apply to env
-fun sv-eval(v: semval, e: env): <div> int
-  match v
-    SVExpr(f) -> f(e)
-    SVList(Cons(x, _)) -> sv-eval(x, e)
-    _ -> 0
-
-// Extract a statement thunk, apply to env
-fun sv-exec(v: semval, e: env): <div,console,loop-break> env
-  match v
-    SVStmt(f) -> f(e)
-    SVList(Cons(x, _)) -> sv-exec(x, e)
-    _ -> e
-
-fun sv-ident(v: semval): string
-  match v
-    SVIdent(s) -> s
-    SVList(Cons(x, _)) -> sv-ident(x)
-    _ -> ""
-
-fun sv-list(v: semval): list<semval>
-  match v
-    SVList(vs) -> vs
-    _ -> []
-
-// === Break effect ===
 pub effect loop-break
   ctl do-break(e: env): a
 
-// === Semantic Actions ===
-// These are called during parsing to build thunks (closures)
-// The thunks are executed later with the actual environment
-
-// Default action: wrap children in a list
-// Also handles inline action built-ins: _text, _int, _str, _cons
 fun default-action(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  // Inline action built-ins
-  if name == "_text" then
-    // $0 - return text as identifier (for further processing)
-    SVIdent(txt)
+  if name == "_text" then SVIdent(txt)
   elif name == "_int" || name == "int" then
-    // int($x) - parse as integer expression
     val n = txt.list.take-while(fn(c) c.is-digit || c == '-').string.parse-int.default(0)
     SVExpr(fn(_) n)
-  elif name == "_str" then
-    SVIdent(txt)
+  elif name == "_str" then SVIdent(txt)
   elif name == "_cons" then
-    // Constructor: Assign, Decl, Int, Ident, etc.
     match txt
       "Assign" -> match children
         Cons(SVIdent(id), Cons(SVExpr(f), _)) -> SVStmt(fn(e) env-set(e, id, f(e)))
@@ -103,12 +56,10 @@ fun default-action(name: string, txt: string, children: list<semval>, caps: capt
         Cons(SVExpr(f), _) -> SVStmt(fn(e) if f(e) == 0 then do-break(e) else e)
         _ -> SVStmt(fn(e) e)
       "Loop" -> match children
-        Cons(SVStmt(body), _) -> SVStmt(fn(e) exec-loop-thunk(e, body))
+        Cons(SVStmt(body), _) -> SVStmt(fn(e) exec-loop(e, body))
         _ -> SVStmt(fn(e) e)
       "Block" ->
-        val inner = match children
-          Cons(SVList(vs), _) -> vs
-          _ -> children
+        val inner = match children { Cons(SVList(vs), _) -> vs; _ -> children }
         val stmts = flatten-sv(inner).filter(fn(c) match c { SVStmt(_) -> True; _ -> False })
         SVStmt(fn(e) stmts.foldl(e, fn(acc, s) match s { SVStmt(f) -> f(acc); _ -> acc }))
       "Var" -> match children
@@ -124,88 +75,59 @@ fun default-action(name: string, txt: string, children: list<semval>, caps: capt
         Cons(SVExpr(l), Cons(SVExpr(r), _)) -> SVExpr(fn(e) l(e) - r(e))
         _ -> SVExpr(fn(_) 0)
       _ -> SVList(children)
-  // Capture operators when matching literals
-  elif name == "_lit" then
-    SVList(children)
+  elif name == "_lit" then SVList(children)
   else match children
-    Cons(c, Nil) -> c  // Single child: pass through
+    Cons(c, Nil) -> c
     _ -> SVList(children)
 
-fun exec-loop-thunk(e: env, body: (env) -> <div,console,loop-break> env): <div,console,loop-break> env
+fun exec-loop(e: env, body: (env) -> <div,console,loop-break> env): <div,console,loop-break> env
   with ctl do-break(e1) e1
-  val e2 = body(e)
-  exec-loop-thunk(e2, body)
+  exec-loop(body(e), body)
 
-// Flatten SVList wrappers
 fun flatten-sv(vs: list<semval>): list<semval>
   vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
     .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
     .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
 
-// Build the action table (all rules use inline actions now)
-fun pl0-actions(): actions<semval>
+fun actions(): actions<semval>
   []
 
-// Execute a statement semval safely (handle break outside loop)
 fun exec-safe(v: semval, e: env): <div, console> env
   with ctl do-break(e1)
-    println("Error: 'break_if' used outside of loop")
+    println("Error: 'break_ifz' used outside of loop")
     e1
-  sv-exec(v, e)
+  match v
+    SVStmt(f) -> f(e)
+    SVList(Cons(x, _)) -> exec-safe(x, e)
+    _ -> e
 
-// === Main ===
 pub fun main()
   val args = get-args()
-  val prog-path = match args
-    Cons(p, _) -> p
-    Nil -> "../examples/example_0.pl0"
-  val arg1-val = match args
-    Cons(_, Cons(n, _)) -> n.parse-int.default(0)
-    _ -> 0
-  val arg2-val = match args
-    Cons(_, Cons(_, Cons(n, _))) -> n.parse-int.default(0)
-    _ -> 0
+  val prog-path = match args { Cons(p, _) -> p; Nil -> "examples/example.e1" }
+  val arg1-val = match args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
+  val arg2-val = match args { Cons(_, Cons(_, Cons(n, _))) -> n.parse-int.default(0); _ -> 0 }
 
-  "Starting (direct execution, no AST)...".println
-  // Read and parse the PEG grammar from file
   val grammar-text = read-text-file("src/e1.peg".path)
-  ("Grammar file read: " ++ grammar-text.count.int/show ++ " chars").println
   val g = parse-peg(grammar-text)
-  println("Grammar loaded: " ++ g.length.int/show ++ " rules")
-
-  // Read program from file
   val prog = read-text-file(prog-path.path)
-  println("Program loaded (" ++ prog.count.int/show ++ " chars): " ++ prog-path)
-
-  // Set up semantic actions
-  val acts = pl0-actions()
+  println("e1: " ++ prog-path ++ " (" ++ prog.count.int/show ++ " chars)")
 
   var input := prog.slice
   var current-env: env := [("arg1", arg1-val), ("arg2", arg2-val)]
 
-  // Skip initial whitespace
-  match peg-exec-partial(g, acts, default-action, "_", input)
+  match peg-exec-partial(g, actions(), default-action, "_", input)
     Just((rest, _)) -> input := rest
     Nothing -> ()
 
-  var count := 0
-
   while { !input.is-empty }
-    // Parse statement with semantic actions - returns a thunk
-    match peg-exec-partial(g, acts, default-action, "statement", input)
+    match peg-exec-partial(g, actions(), default-action, "statement", input)
       Just((rest, sv)) ->
-        count := count + 1
-        // Execute the thunk to get the new environment
         current-env := exec-safe(sv, current-env)
-
-        // Skip whitespace/comments after statement
-        match peg-exec-partial(g, acts, default-action, "_", rest)
+        match peg-exec-partial(g, actions(), default-action, "_", rest)
           Just((rest2, _)) -> input := rest2
           Nothing -> input := rest
-
       Nothing ->
-        if !input.is-empty then
-          println("Parse failed at: " ++ input.string.first(20).string ++ "...")
-        input := "".slice // Terminate loop
+        if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
+        input := "".slice
 
   println("")

@@ -12,8 +12,8 @@ Currently in an initial work-in-progress state.
 The "e" in e0–e6 may stand for "experiment" or "exploration".
 
 **Current state:**
-- e1 (and e0) have two different working interpreters written in Koka, one in C++, and a compiler in C++ targeting LLVM IR.
-- e2 has a working Koka PEG interpreter
+- e1 has a [language specification](docs/E1_SPEC.md), two Koka interpreters (AST-based and PEG), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
+- e0 and e2 have PEG interpreters in Koka
 - Benchmarks for levels 1 and 2
 - e3 through e6 have PEG grammars and example files, but no interpreters yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
@@ -31,7 +31,7 @@ make help         # Show all options
 
 **Run implementations:**
 ```bash
-make koka-pl0       # Koka interpreter (e1)
+make koka-e1        # Koka interpreter (e1)
 make koka-peg       # Koka PEG interpreter (e1)
 make koka-peg2      # Koka PEG interpreter (e2)
 make run            # C++ interpreter
@@ -62,10 +62,10 @@ Each level is a strict superset of the previous.
 ## Examples
 
 - [example.e0](examples/example.e0) — Sequential computation (e0)
-- [example.e1](examples/example.e1) — Emulating e2 features in e1
 - [factorial.e1](examples/factorial.e1) — Factorial benchmark (e1)
 - [collatz.e1](examples/collatz.e1) — Collatz sequence iteration (e1)
 - [gcd.e1](examples/gcd.e1) — Euclidean algorithm (e1)
+- [example.e1](examples/example.e1) — Emulating e2 features in e1
 - [factorial.e2](examples/factorial.e2) — Factorial benchmark (e2)
 - [collatz.e2](examples/collatz.e2) — Collatz sequence (e2)
 - [gcd.e2](examples/gcd.e2) — Euclidean algorithm (e2)
@@ -103,7 +103,6 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 
 ## Further Reading
 
-- [docs/E1_SPEC.md](docs/E1_SPEC.md) — e1 language specification
 - [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification

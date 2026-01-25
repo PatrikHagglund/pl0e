@@ -22,7 +22,7 @@ Interpreters and compilers for e1 and e2.
 Traditional parse-then-execute with AST.
 
 ```bash
-make koka-pl0
+make koka-e1
 ```
 
 **`e1peg.koka` — Single-Phase (e1):**

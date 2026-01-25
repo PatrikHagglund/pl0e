@@ -104,7 +104,7 @@ Error handling is either implementation-defined (reject at compile-time, termina
 
 ### Conditional (if-then pattern)
 
-```pl0
+```e1
 // if (cond != 0) then action
 loop {
   break_ifz cond
@@ -115,7 +115,7 @@ loop {
 
 ### Boolean Inversion
 
-```pl0
+```e1
 // is_zero = (n == 0) ? 1 : 0
 is_zero := 1
 loop {

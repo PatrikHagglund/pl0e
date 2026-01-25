@@ -165,11 +165,11 @@ src/e1: src/e1.koka src/e1-types.koka src/e1-parser.koka src/e1-eval.koka $(IMAG
 	$(KOKA) $(KOKA_OPT) -o src/e1 src/e1.koka 2>/dev/null
 	chmod +x src/e1
 
-koka-pl0: $(IMAGE_DEPS)
+koka-e1: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka -l src/e1-types.koka && koka -l src/e1-parser.koka && koka -l src/e1-eval.koka && koka -e src/e1.koka -- $(FILE)"
 
 koka-peg: $(IMAGE_DEPS)
-	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e1peg.koka -- examples/example.e0"
+	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e1peg.koka -- examples/example.e1"
 
 koka-peg2: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e2peg.koka -- examples/example.e2"
@@ -245,4 +245,4 @@ help:
 	@echo ""
 	@echo "Setup: . ./setup.sh  (or run ./setup.sh for info)"
 
-.PHONY: run run-llvm run-llvm-native clean bench-1 bench-intbits koka-pl0 koka-peg koka-peg0 koka-peg-test test help
+.PHONY: run run-llvm run-llvm-native clean bench bench-intbits koka-e1 koka-peg koka-peg0 koka-peg2 koka-peg-test test help

@@ -125,50 +125,25 @@ fun default-action(name: string, txt: string, children: list<semval>, caps: capt
     Cons(c, Nil) -> c  // Single child: pass through
     _ -> SVList(children)
 
-// Flatten SVList wrappers (3 levels deep, sufficient for our grammar)
-fun flatten-sv(vs: list<semval>): list<semval>
-  vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
-    .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
-    .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
-
 fun exec-loop-thunk(e: env, body: (env) -> <div,console,loop-break> env): <div,console,loop-break> env
   with ctl do-break(e1) e1
   val e2 = body(e)
   exec-loop-thunk(e2, body)
 
-// Action for block statements
-fun act-block(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  val all-children = flatten-sv(children)
-
-  val stmts = all-children.filter fn(c)
-    match c
-      SVStmt(_) -> True
-      _ -> False
-
-  SVStmt fn(e)
-    stmts.foldl(e) fn(acc, s)
-      match s
-        SVStmt(f) -> f(acc)
-        _ -> acc
-
-// Action for statement: pass through the already-processed child
-fun act-statement(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  match children
-    Cons(c, _) ->
-      match c
-        SVStmt(_) -> c
-        SVList(vs) ->
-          vs.filter(fn(v) match v { SVStmt(_) -> True; _ -> False }).head.default(SVStmt(fn(e) e))
-        _ -> SVStmt(fn(e) e)
-    _ -> SVStmt(fn(e) e)
-
 // Build the action table
 fun pl0-actions(): actions<semval>
-  [
-    // All rules now use inline actions except block and statement
-    ("block", act-block),
-    ("statement", act-statement)
-  ]
+  [("block", act-block)]
+
+// Flatten SVList wrappers (non-recursive to avoid div)
+fun flatten-sv(vs: list<semval>): list<semval>
+  vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
+    .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
+    .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
+
+// Action for block statements
+fun act-block(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
+  val stmts = flatten-sv(children).filter(fn(c) match c { SVStmt(_) -> True; _ -> False })
+  SVStmt(fn(e) stmts.foldl(e, fn(acc, s) match s { SVStmt(f) -> f(acc); _ -> acc }))
 
 // Execute a statement semval safely (handle break outside loop)
 fun exec-safe(v: semval, e: env): <div, console> env

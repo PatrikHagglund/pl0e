@@ -10,7 +10,7 @@
 
 // Program structure
 program         = _ statement*
-statement       = binding / loop_stmt / break_stmt / print_stmt / block  @statement
+statement       = binding / loop_stmt / break_stmt / print_stmt / block
 
 block           = "{" _ (statement ";"? _)* "}" _  @block
 loop_stmt       = "loop" _ body:statement { Loop($body) }

@@ -51,6 +51,10 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - `LEDGER.md`
 
 ## Done (prune when exceeding 30 items)
+- Added inline actions to PEG grammar with expression language
+  - Syntax: pattern { Cons($capture) }
+  - Moved int_lit, ident, binding, print, break, loop to inline actions
+  - Semantics now partially in grammar, not just Koka code
 - Added named captures to PEG (`n:pattern` syntax) for binding sub-matches
 - Created `docs/PL0_1_SPEC.md` — language specification for pl0_1
 - Added error handling section to `docs/IMPLEMENTATIONS.md`

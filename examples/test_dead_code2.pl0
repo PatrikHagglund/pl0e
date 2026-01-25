@@ -1,0 +1,8 @@
+// Test: Infinite loop prevents parsing of subsequent invalid syntax
+//
+// pl0peg1 (single-phase): Should print 1, then loop forever - never parses invalid code
+// pl01 (two-phase): Should FAIL immediately - parses entire program first
+
+print 1
+loop { x := 1 }
+@@@ invalid syntax @@@

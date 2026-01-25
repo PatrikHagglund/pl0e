@@ -1,0 +1,20 @@
+// Test: Parse errors in dead code
+// 
+// FINDING: Both interpreters are lenient about trailing invalid syntax.
+// - pl01: Uses `many(pstmt)` which stops parsing on failure, ignores rest
+// - pl0peg1: Parses statement-by-statement, reports parse failure but continues
+//
+// Neither requires consuming all input, so both tolerate trailing garbage.
+// A true difference would require pl01 to enforce full input consumption.
+//
+// See also: test_dead_code3.pl0, test_dead_code4.pl0
+
+x := 1
+print x
+
+loop {
+  break_ifz 0
+  @@@ invalid syntax @@@
+}
+
+print 2

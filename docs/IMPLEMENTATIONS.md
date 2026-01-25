@@ -203,3 +203,19 @@ C++ and LLVM backends have similar performance when compiled to native.
 - clang-format with LLVM base, 100 columns, 4-space indent
 - `std::print` with explicit `\n`
 - Short aliases `p()`/`f()` in compiler
+
+## Error Handling
+
+Implementations differ in strictness for invalid syntax:
+
+| Implementation | Behavior |
+|----------------|----------|
+| C++ | **Strict** — tokenizes all → parses all → executes. Fails on any invalid character. |
+| pl01 (Koka) | **Lenient** — `many(pstmt)` stops on parse failure, ignores trailing garbage. |
+| pl0peg1 (Koka) | **Lenient** — parses statement-by-statement, reports failure but tolerates garbage. |
+
+Example (`print 1` followed by `@@@ invalid`):
+- C++: Error before execution ("Unknown char: @")
+- Koka: Prints `1`, then stops/reports
+
+See `examples/test_dead_code*.pl0` for test cases.

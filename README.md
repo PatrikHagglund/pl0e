@@ -172,6 +172,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 
 ## Further Reading
 
+- [docs/PL0_1_SPEC.md](docs/PL0_1_SPEC.md) — PL/0 Level 1 language specification
 - [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification

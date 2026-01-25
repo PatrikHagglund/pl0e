@@ -1,0 +1,12 @@
+// Test: Early termination via break prevents parsing of trailing invalid syntax
+//
+// BEHAVIORAL DIFFERENCE:
+// - C++ interpreter: FAILS - tokenizer rejects '@' before any execution
+// - pl01 (Koka): Prints 1, silently ignores trailing garbage (many stops)
+// - pl0peg1 (Koka): Prints 1, reports "Parse failed at: @@@..."
+//
+// C++ is strict (tokenize all → parse all → execute)
+// Koka interpreters are lenient (tolerate trailing garbage)
+
+print 1
+@@@ invalid

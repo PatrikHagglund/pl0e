@@ -1,0 +1,8 @@
+// Test: Runtime error prevents parsing of subsequent invalid syntax
+//
+// pl0peg1: Executes statement, hits runtime error, stops - never parses invalid code
+// pl01: Parses all first, then executes - but many(pstmt) stops at invalid syntax anyway
+
+print 1
+break_ifz 0
+@@@ invalid

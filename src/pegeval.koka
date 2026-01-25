@@ -1,0 +1,24 @@
+// Shared runtime for PEG-based e0/e1/e2 interpreters
+
+module pegeval
+
+pub alias penv = list<(string, int)>
+
+pub fun env-get(e: penv, key: string): int
+  match e.filter(fn(p) p.fst == key)
+    Cons((_, v), _) -> v
+    Nil -> 0
+
+pub fun env-set(e: penv, key: string, v: int): penv
+  Cons((key, v), e.filter(fn(p) p.fst != key))
+
+pub effect loop-break
+  ctl do-break(e: penv): a
+
+pub fun exec-loop(e: penv, body: (penv) -> <div,console,loop-break> penv): <div,console,loop-break> penv
+  with ctl do-break(e1) e1
+  exec-loop(body(e), body)
+
+
+pub fun main(): console ()
+  ()

@@ -153,8 +153,9 @@ bench-intbits: $(IMAGE_DEPS)
 		fi; \
 	done
 
-src/e1peg: src/e1peg.koka src/peg.koka $(IMAGE_DEPS)
+src/e1peg: src/e1peg.koka src/peg.koka src/pegeval.koka $(IMAGE_DEPS)
 	$(KOKA) $(KOKA_OPT) --compile src/peg.koka 2>/dev/null
+	$(KOKA) $(KOKA_OPT) --compile src/pegeval.koka 2>/dev/null
 	$(KOKA) $(KOKA_OPT) -o src/e1peg src/e1peg.koka 2>/dev/null
 	chmod +x src/e1peg
 
@@ -169,18 +170,19 @@ koka-e1: $(IMAGE_DEPS)
 	$(RUN) sh -c "koka -l src/e1-types.koka && koka -l src/e1-parser.koka && koka -l src/e1-eval.koka && koka -e src/e1.koka -- $(FILE)"
 
 koka-peg-e1: $(IMAGE_DEPS)
-	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e1peg.koka -- examples/example.e1"
+	$(RUN) sh -c "koka --compile src/peg.koka && koka --compile src/pegeval.koka && koka -e src/e1peg.koka -- examples/example.e1"
 
 koka-peg-e2: $(IMAGE_DEPS)
-	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e2peg.koka -- examples/example.e2"
+	$(RUN) sh -c "koka --compile src/peg.koka && koka --compile src/pegeval.koka && koka -e src/e2peg.koka -- examples/example.e2"
 
-src/e2peg: src/e2peg.koka src/peg.koka $(IMAGE_DEPS)
+src/e2peg: src/e2peg.koka src/peg.koka src/pegeval.koka $(IMAGE_DEPS)
 	$(KOKA) $(KOKA_OPT) --compile src/peg.koka 2>/dev/null
+	$(KOKA) $(KOKA_OPT) --compile src/pegeval.koka 2>/dev/null
 	$(KOKA) $(KOKA_OPT) -o src/e2peg src/e2peg.koka 2>/dev/null
 	chmod +x src/e2peg
 
 koka-peg-e0: $(IMAGE_DEPS)
-	$(RUN) sh -c "koka --compile src/peg.koka && koka -e src/e0peg.koka -- examples/example.e0"
+	$(RUN) sh -c "koka --compile src/peg.koka && koka --compile src/pegeval.koka && koka -e src/e0peg.koka -- examples/example.e0"
 
 koka-peg-test: $(IMAGE_DEPS)
 	$(RUN) koka -e test/peg_test.koka

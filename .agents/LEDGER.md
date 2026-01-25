@@ -51,6 +51,10 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - `LEDGER.md`
 
 ## Done (prune when exceeding 30 items)
+- Added inline action support for suffix operators (*, +, ?)
+  - `{ Block }` at end of sequence wraps star's children
+  - Action table now empty — all semantics via inline actions + default-action
+  - Documented future fold syntax consideration in PEG_SPEC.md
 - Added inline actions to PEG grammar with expression language
   - Syntax: pattern { Cons($capture) }
   - Moved int_lit, ident, binding, print, break, loop to inline actions

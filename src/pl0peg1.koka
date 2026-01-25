@@ -31,9 +31,7 @@ pub type semval
   SVExpr(f: (env) -> <div> int)      // Deferred expression evaluation
   SVStmt(f: (env) -> <div,console,loop-break> env)  // Deferred statement execution
   SVIdent(s: string)                 // Identifier (for bindings)
-  SVOp(op: string)                   // Operator
   SVList(vs: list<semval>)           // Sequence
-  SVUnit                             // Whitespace, etc.
 
 // Extract an expression thunk, apply to env
 fun sv-eval(v: semval, e: env): <div> int
@@ -53,11 +51,6 @@ fun sv-ident(v: semval): string
   match v
     SVIdent(s) -> s
     SVList(Cons(x, _)) -> sv-ident(x)
-    _ -> ""
-
-fun sv-op(v: semval): string
-  match v
-    SVOp(s) -> s
     _ -> ""
 
 fun sv-list(v: semval): list<semval>
@@ -112,108 +105,31 @@ fun default-action(name: string, txt: string, children: list<semval>, caps: capt
       "Loop" -> match children
         Cons(SVStmt(body), _) -> SVStmt(fn(e) exec-loop-thunk(e, body))
         _ -> SVStmt(fn(e) e)
-      "Expr" -> match children
-        Cons(c, _) -> c
-        _ -> SVList(children)
+      "Var" -> match children
+        Cons(SVIdent(id), _) -> SVExpr(fn(e) env-get(e, id))
+        _ -> SVExpr(fn(_) 0)
+      "Neg" -> match children
+        Cons(SVExpr(f), _) -> SVExpr(fn(e) 0 - f(e))
+        _ -> SVExpr(fn(_) 0)
+      "Add" -> match children
+        Cons(SVExpr(l), Cons(SVExpr(r), _)) -> SVExpr(fn(e) l(e) + r(e))
+        _ -> SVExpr(fn(_) 0)
+      "Sub" -> match children
+        Cons(SVExpr(l), Cons(SVExpr(r), _)) -> SVExpr(fn(e) l(e) - r(e))
+        _ -> SVExpr(fn(_) 0)
       _ -> SVList(children)
   // Capture operators when matching literals
   elif name == "_lit" then
-    val t = txt.trim
-    if t == "+" || t == "-" then SVOp(t)
-    else SVList(children)
+    SVList(children)
   else match children
     Cons(c, Nil) -> c  // Single child: pass through
     _ -> SVList(children)
-
-// Action for variable reference (in expression context)
-fun act-var-expr(id: string): semval
-  SVExpr(fn(e) env-get(e, id))
-
-// Action for atoms
-fun act-atom(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  // atom = int_lit / ident / "(" _ expression ")" _
-  match children
-    Cons(SVExpr(f), _) -> SVExpr(f)  // int_lit or parenthesized expr
-    Cons(SVIdent(id), _) -> act-var-expr(id)  // variable reference
-    Cons(SVList(cs), _) ->
-      // Find expression or ident in children
-      cs.foldl(SVExpr(fn(_) 0)) fn(acc, c)
-        match c
-          SVExpr(_) -> c
-          SVIdent(id) -> act-var-expr(id)
-          _ -> acc
-    _ -> SVExpr(fn(_) 0)
-
-// Action for unary expressions
-fun act-unary(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  val is-neg = txt.trim.sslice/starts-with("-").bool
-  match children
-    Cons(c, _) ->
-      val inner = match c
-        SVExpr(f) -> f
-        SVIdent(id) -> fn(e) env-get(e, id)
-        SVList(cs) ->
-          val found = cs.foldl(fn(_: env) 0) fn(acc, x)
-            match x
-              SVExpr(f) -> f
-              SVIdent(id) -> fn(e) env-get(e, id)
-              _ -> acc
-          found
-        _ -> fn(_) 0
-      if is-neg then SVExpr(fn(e) 0 - inner(e))
-      else SVExpr(inner)
-    _ -> SVExpr(fn(_) 0)
-
-// Helper: evaluate sum with ops
-fun eval-sum(e: env, exprs: list<semval>, ops: list<string>, acc: int): <div> int
-  match (exprs, ops)
-    (Cons(sv, rest-exprs), Cons(op, rest-ops)) ->
-      val v = match sv
-        SVExpr(f) -> f(e)
-        SVIdent(id) -> env-get(e, id)
-        _ -> 0
-      val new-acc = if op == "-" then acc - v else acc + v
-      eval-sum(e, rest-exprs, rest-ops, new-acc)
-    _ -> acc
 
 // Flatten SVList wrappers (3 levels deep, sufficient for our grammar)
 fun flatten-sv(vs: list<semval>): list<semval>
   vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
     .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
     .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
-
-// Action for sum expressions (handles + and -)
-fun act-sum-expr(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  // sum_expr = unary (("+" / "-") _ unary)*
-  val all-children = flatten-sv(children)
-
-  // Collect expressions and operators in order
-  val (exprs, ops) = all-children.foldl(([], []): (list<semval>, list<string>)) fn(acc, c)
-    val (es, os) = acc
-    match c
-      SVExpr(_) -> (Cons(c, es), os)
-      SVIdent(_) -> (Cons(c, es), os)
-      SVOp(op) -> (es, Cons(op, os))
-      _ -> acc
-
-  val exprs2 = exprs.reverse
-  val ops2 = ops.reverse
-
-  match exprs2
-    Nil -> SVExpr(fn(_) 0)
-    Cons(first, rest) ->
-      SVExpr fn(e)
-        val start = match first
-          SVExpr(f) -> f(e)
-          SVIdent(id) -> env-get(e, id)
-          _ -> 0
-        eval-sum(e, rest, ops2, start)
-
-// Action for expression (wrapper)
-fun act-expression(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  match children
-    Cons(c, _) -> c
-    _ -> SVExpr(fn(_) 0)
 
 fun exec-loop-thunk(e: env, body: (env) -> <div,console,loop-break> env): <div,console,loop-break> env
   with ctl do-break(e1) e1
@@ -236,30 +152,20 @@ fun act-block(name: string, txt: string, children: list<semval>, caps: captures<
         _ -> acc
 
 // Action for statement: pass through the already-processed child
-// statement = binding / loop_stmt / break_stmt / print_stmt / block
-// Each alternative has its own action, so we just return the child
 fun act-statement(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
   match children
     Cons(c, _) ->
       match c
-        SVStmt(_) -> c  // Already processed by child action
-        SVList(vs) ->   // Find stmt in list
+        SVStmt(_) -> c
+        SVList(vs) ->
           vs.filter(fn(v) match v { SVStmt(_) -> True; _ -> False }).head.default(SVStmt(fn(e) e))
         _ -> SVStmt(fn(e) e)
     _ -> SVStmt(fn(e) e)
 
-// Action for operators
-fun act-op(name: string, txt: string, children: list<semval>, caps: captures<semval>): semval
-  SVOp(txt.trim)
-
 // Build the action table
 fun pl0-actions(): actions<semval>
   [
-    // int_lit, ident, binding, print, break, loop use inline actions
-    ("atom", act-atom),
-    ("unary", act-unary),
-    ("sum_expr", act-sum-expr),
-    ("expression", act-expression),
+    // All rules now use inline actions except block and statement
     ("block", act-block),
     ("statement", act-statement)
   ]

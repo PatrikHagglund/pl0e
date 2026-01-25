@@ -22,11 +22,16 @@ print_stmt      = "print" _ e:expression { Print($e) }
 binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
                 / id:ident _ ":" { Decl($id) }
 
-// Expressions
-expression      = sum_expr  @expression
-sum_expr        = unary (("+" / "-") _ unary)*  @sum_expr
-unary           = "-"? atom  @unary
-atom            = int_lit / ident / "(" _ expression ")" _  @atom
+// Expressions - using inline actions (right-associative)
+expression      = sum_expr
+sum_expr        = l:unary "+" _ r:sum_expr { Add($l, $r) }
+                / l:unary "-" _ r:sum_expr { Sub($l, $r) }
+                / unary
+unary           = "-" _ e:atom { Neg($e) }
+                / atom
+atom            = int_lit
+                / id:ident { Var($id) }
+                / "(" _ e:expression ")" _ { $e }
 
 int_lit         = digit+ _ { Int($0) }
 

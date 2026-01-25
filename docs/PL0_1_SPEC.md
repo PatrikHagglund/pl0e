@@ -82,7 +82,7 @@ Implementations may provide zero or more `arg<N>` variables (`arg1`, `arg2`, ...
 
 **Negation** (`-expr`): Arithmetic negation
 
-**Addition/Subtraction** (`a + b`, `a - b`)
+**Addition/Subtraction** (`a + b`, `a - b`): Associativity is implementation-defined.
 
 **Parentheses**: Grouping for precedence
 

@@ -1,8 +1,15 @@
 # PL/0 Exploration
 
-This project explores the design and implementation of simple programming languages, inspired by Niklaus Wirth's PL/0.
+This project explores the design and implementation of simple programming languages, inspired by Niklaus Wirth's [PL/0](https://en.wikipedia.org/wiki/PL/0).
+
+**Current state:**
 
 Currently in an initial work-in-progress state.
+- e1 has a [language specification](docs/E1_SPEC.md), two [Koka](https://koka-lang.github.io/) interpreters (AST-based and [PEG](https://en.wikipedia.org/wiki/Parsing_expression_grammar) with actions), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
+- e0, e2, and e3 have PEG interpreters in Koka
+- Benchmarks for levels 1, 2, and 3
+- e4 through e6 have PEG grammars and example files, but no interpreters yet
+- For each level, example code shows how to emulate higher-level features with lower-level primitives
 
 **Philosophy:**
 - Keep languages small
@@ -10,13 +17,6 @@ Currently in an initial work-in-progress state.
 - Try several implementation approaches
 
 The "e" in e0–e6 may stand for "experiment" or "exploration".
-
-**Current state:**
-- e1 has a [language specification](docs/E1_SPEC.md), two Koka interpreters (AST-based and PEG), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
-- e0, e2, and e3 have PEG interpreters in Koka
-- Benchmarks for levels 1, 2, and 3
-- e4 through e6 have PEG grammars and example files, but no interpreters yet
-- For each level, example code shows how to emulate higher-level features with lower-level primitives
 
 ## Quick Start
 

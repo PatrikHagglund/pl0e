@@ -14,7 +14,6 @@ The "e" in e0–e6 may stand for "experiment" or "exploration".
 **Current state:**
 - e1 has a [language specification](docs/E1_SPEC.md), two Koka interpreters (AST-based and PEG), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
 - e0, e2, and e3 have PEG interpreters in Koka
-- e3 has a known limitation: no recursive closures
 - Benchmarks for levels 1, 2, and 3
 - e4 through e6 have PEG grammars and example files, but no interpreters yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives

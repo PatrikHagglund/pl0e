@@ -30,6 +30,7 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - Other levels (e2 through e6) have PEG grammars and examples but no interpreters
 
 ## Next
+- Protoype a replacement for Makefile rules and the setup script. For example, use of Bazel. (Do this on a branch.)
 - Restructure directories by language level (e0/, e1/, e2/, ... + shared/)
   - Each level gets its own directory with grammar, implementations, examples, docs
   - Shared code (peg.koka, bigint runtime) in shared/
@@ -45,7 +46,7 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - Continue with other grammar/interpreter work
 - Standard library?
 - Support for symbolic expressions (as in computer algebra systems)?
-- Testing with a tool like llvm-stress (and llvm-reduce)
+- Testing with a tool like csmith/llvm-stress (and creduce/llvm-reduce)
 - Perhaps a seprate project: "Agent DSL": Use LLMs and tools as operators and add memory and parallel control flow. VALIDATE/RETRY clause. Linda-style parallelism for sharing context information?
 
 ## Now

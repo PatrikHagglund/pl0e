@@ -1,0 +1,19 @@
+# Use local output base (avoids NFS issues)
+startup --output_user_root=../.bazel
+
+# C++26 flags
+build --cxxopt=-std=gnu++26
+build --cxxopt=-Wall
+build --cxxopt=-Wextra  
+build --cxxopt=-Wno-vla-cxx-extension
+build --copt=-O3
+build --copt=-march=native
+
+# Also apply to tools (exec configuration)
+build --host_cxxopt=-std=gnu++26
+build --host_cxxopt=-Wno-vla-cxx-extension
+
+# Hermetic LLVM toolchain provided by toolchains_llvm_bootstrapped
+# No system compiler required - fully reproducible builds
+
+# Hermetic Koka toolchain - no system koka required

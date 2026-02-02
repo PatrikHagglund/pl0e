@@ -23,28 +23,28 @@ Interpreters and compilers for e0–e3.
 Traditional parse-then-execute with AST.
 
 ```bash
-make koka-e1
+bazel run //src:e1_koka -- examples/factorial.e1
 ```
 
 **`e1peg.koka` — Single-Phase (e1):**
 No AST — semantic actions during parsing produce thunks. Uses shared `pegeval.koka` runtime.
 
 ```bash
-make koka-peg-e1
+bazel run //src:e1peg -- examples/factorial.e1
 ```
 
 **`e2peg.koka` — Single-Phase (e2):**
 Extends e1peg with case statements, comparisons, and multiplication/division.
 
 ```bash
-make koka-peg-e2
+bazel run //src:e2peg -- examples/factorial.e2
 ```
 
 **`e3peg.koka` — Single-Phase (e3):**
 Extends e2 with booleans, closures, and case expressions. Uses a separate interpreter (not `pegeval.koka`) with its own AST types for `rval` (int/bool/closure).
 
 ```bash
-make koka-peg-e3
+bazel run //src:e3peg -- examples/factorial.e3
 ```
 
 **Known limitations:**
@@ -72,7 +72,7 @@ effect loop-break
 Hand-written lexer and recursive descent parser, AST-based execution.
 
 ```bash
-make cpp-e1
+bazel run //src:e1 -- examples/factorial.e1
 ```
 
 ## Compiler (`e1_compile.cpp`)
@@ -81,13 +81,13 @@ Two backends from a single code generator:
 
 | Backend | Output | Command |
 |---------|--------|---------|
-| C++ (default) | `.cpp` file | `./e1_compile prog.e1` |
-| LLVM IR | `.ll` file | `./e1_compile --llvm prog.e1` |
+| C++ (default) | `.cpp` file | `bazel run //examples:factorial_cpp` |
+| LLVM IR | `.ll` file | `bazel run //examples:factorial_llvm` |
 
 ```bash
-make cpp-e1-cpp     # C++ backend
-make cpp-e1-llvmjit # LLVM JIT
-make cpp-e1-llvm    # LLVM native
+bazel run //examples:factorial_cpp    # C++ backend
+bazel run //examples:factorial_llvm   # LLVM native
+bazel run //bench:llvmjit             # LLVM JIT
 ```
 
 ## Integer Configuration
@@ -215,22 +215,21 @@ src/
 ## Benchmarks
 
 ```bash
-make bench                        # 2000 iterations of 31!
-make bench BENCH_ARGS="100 20"    # custom
+bazel run //bench:bench                   # 2000 iterations of 31!
+bazel run //bench:bench -- 100 20         # custom
 ```
 
 Results for `2000 31` (bigint):
 
 | Implementation | Time |
 |----------------|------|
-| LLVM backend | 2ms |
-| C++ backend | 17ms |
-| LLVM JIT | 106ms |
-| C++ interpreter | 0.58s |
-| Koka PEG e2 | 1.1s |
-| Koka PEG e3 | 1.2s |
-| Koka interpreter | 2.1s |
-| Koka PEG e1 | 2.5s |
+| LLVM backend | 16ms |
+| C++ backend | 18ms |
+| LLVM JIT | 80ms |
+| Koka PEG e2 | 0.96s |
+| C++ interpreter | 0.97s |
+| Koka interpreter | 1.75s |
+| Koka PEG e1 | 1.95s |
 
 The e2 PEG interpreter is ~2× faster than e1 PEG for factorial because e2 has native multiplication while e1 must emulate it with nested loops. The e3 interpreter has similar performance to e2.
 

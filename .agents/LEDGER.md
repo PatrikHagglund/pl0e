@@ -27,10 +27,17 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - Stack-based bigint runtime (`e1_rt_bigint_stack.cpp`) — no heap allocation
 - C++ implementations support configurable integer widths via `e1.hpp`
 - Factorial benchmark: C++ backend 17ms, LLVM backend 17ms, lli 77ms
+- Bazel build system with hermetic toolchains (LLVM, Koka) — no system compiler required
 - Other levels (e2 through e6) have PEG grammars and examples but no interpreters
 
 ## Next
-- Protoype a replacement for Makefile rules and the setup script. For example, use of Bazel. (Do this on a branch.)
+- Create proper `rules_koka` for Bazel
+  - Add `koka_library` rule (compile to `.kki` interface files)
+  - Proper dependency tracking (per-file actions instead of rebuilding all together)
+  - Toolchain abstraction (`toolchain_type` + `koka_toolchain` for multi-platform)
+  - macOS/Windows platform support
+  - `koka_test` rule
+  - Challenge: Koka's incremental build (`.koka/` dir) vs Bazel's action model
 - Restructure directories by language level (e0/, e1/, e2/, ... + shared/)
   - Each level gets its own directory with grammar, implementations, examples, docs
   - Shared code (peg.koka, bigint runtime) in shared/
@@ -52,10 +59,35 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 ## Now
 
 ### Working set (current focus only; replace/prune as "Now" changes)
-- `src/e2peg.koka` — e2 interpreter (done)
-- `src/e2.peg` — e2 grammar with inline actions (done)
+(empty)
 
 ## Done (prune when exceeding 30 items)
+- Fixed Bazel build for C++ targets:
+  - Installed system dependencies: glibc-devel, libstdc++-devel, gcc, g++
+  - Configured `e1_rt_bigint_ll` genrule with `local = True` to access system headers
+  - Configured `e1_llvm_binary` macro with `-fuse-ld=lld` and `local = True`
+  - Working: C++ interpreter (`//src:e1`), compiler (`//src:e1_compile`), all C++/LLVM backend examples
+  - Working test: `//test:e1_interp_test` (PASSED)
+- Hermetic Koka toolchain for Bazel (`koka.bzl`):
+  - Downloads Koka v3.2.2 automatically (no system install needed)
+  - Uses hermetic Clang from toolchains_llvm_bootstrapped
+  - `koka_binary` rule with -O2 optimization
+  - PEG interpreters: `//src:e0peg`, `//src:e1peg`, `//src:e2peg`, `//src:e3peg`
+  - Hand-written interpreter: `//src:e1_koka`
+  - PEG parser tests: `//test:peg_test`
+- Added Bazel Koka target (`//src:e1peg`) using genrule with system koka
+  - Copies files to temp dir to avoid Koka's symlink resolution issues
+  - Multi-step compilation: peg.koka → pegeval.koka → e1peg.koka
+  - Added `--action_env=PATH` to .bazelrc for Koka access
+  - Restored Koka installation to setup.sh (installs to ~/.local/bin)
+- Bazel build system prototype (`bazel-prototype` branch):
+  - Bazel 9.0.0 with bzlmod (rules_cc 0.2.16, rules_shell 0.6.1)
+  - Hermetic LLVM toolchain (toolchains_llvm_bootstrapped 0.4.1, Clang 21)
+  - C++ interpreter/compiler targets, LLVM IR runtime generation
+  - Macros `e1_cpp_binary` and `e1_llvm_binary` for compilation pipelines
+  - Tests (`//test:e1_interp_test`) and benchmarks (`//bench:bench`)
+  - Bazelisk installation in setup.sh
+- Completed e2 and e3 interpreters and grammars
 - Created e2peg.koka interpreter with case/break/comparison/mul-div support
 - Added inline actions to e2.peg grammar
 - Fixed PPlus in peg.koka to collect all children (was only keeping first)

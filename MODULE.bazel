@@ -1,0 +1,19 @@
+module(name = "pl0e", version = "0.1.0")
+
+bazel_dep(name = "rules_cc", version = "0.2.16")
+bazel_dep(name = "rules_shell", version = "0.6.1")
+
+# Primary C++ toolchain - builds libc++ from source for hermeticity
+bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.4.1")
+register_toolchains("@toolchains_llvm_bootstrapped//toolchain:all")
+
+# Hermetic Koka toolchain
+koka_ext = use_extension("//:koka.bzl", "koka_ext")
+use_repo(koka_ext, "koka")
+
+# Extra LLVM tools (lli, llvm-link) via toolchains_llvm
+# Uses statically-linked binaries - no GLIBCXX dependency
+bazel_dep(name = "toolchains_llvm", version = "1.6.0")
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(name = "llvm_tools", llvm_version = "21.1.4")
+use_repo(llvm, "llvm_tools_llvm")

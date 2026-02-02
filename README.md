@@ -20,33 +20,18 @@ The "e" in e0–e6 may stand for "experiment" or "exploration".
 
 ## Quick Start
 
-**Build/test:**
 ```bash
-make              # Auto-detect mode and build
-make test         # Run tests
-make BUILD_MODE=native    # Force native build
-make BUILD_MODE=podman    # Force Podman
-make help         # Show all options
+./setup.sh        # Install Bazelisk
+
+bazel run //src:e1 -- examples/factorial.e1      # C++ interpreter
+bazel run //src:e1peg -- examples/factorial.e1   # Koka PEG interpreter
+bazel run //examples:factorial_cpp               # C++ backend
+bazel run //examples:factorial_llvm              # LLVM backend
+bazel test //test:all                            # Run tests
+bazel run //bench:bench                          # Run benchmarks
 ```
 
-**Run implementations:**
-```bash
-make koka-e1        # Koka interpreter (e1)
-make koka-peg-e0    # Koka PEG interpreter (e0)
-make koka-peg-e1    # Koka PEG interpreter (e1)
-make koka-peg-e2    # Koka PEG interpreter (e2)
-make koka-peg-e3    # Koka PEG interpreter (e3)
-make cpp-e1         # C++ interpreter
-make cpp-e1-cpp     # C++ compiler (C++ backend)
-make cpp-e1-llvm    # C++ compiler (LLVM native)
-make cpp-e1-llvmjit # C++ compiler (LLVM JIT)
-```
-
-**Native setup** (optional — alternatively, tools are installed in a container):
-```bash
-source ./setup.sh
-```
-Installs Clang/LLVM and Koka on Linux (Fedora, Debian/Ubuntu) or macOS.
+Uses hermetic LLVM and Koka toolchains. See [docs/BAZEL.md](docs/BAZEL.md) for details.
 
 ## Grammar Levels
 
@@ -92,22 +77,21 @@ See [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) for details on each imple
 ## Benchmarks
 
 ```bash
-make bench                         # default: 2000 iterations of 31!
-make bench BENCH_ARGS="100 20"     # custom: 100 iterations of 20!
+bazel run //bench:bench                          # default: 2000 iterations of 31!
+bazel run //bench:bench -- 100 20                # custom: 100 iterations of 20!
 ```
 
 Example results for `2000 31` (with bigint, INT_BITS=0):
 
 | Implementation | Time |
 |----------------|------|
-| LLVM backend | 2ms |
-| C++ backend | 17ms |
-| LLVM lli (JIT) | 106ms |
-| C++ interpreter | 0.58s |
-| Koka PEG e2 | 1.1s |
-| Koka PEG e3 | 1.2s |
-| Koka interpreter | 2.1s |
-| Koka PEG e1 | 2.5s |
+| LLVM backend | 16ms |
+| C++ backend | 18ms |
+| LLVM JIT | 80ms |
+| Koka PEG e2 | 0.96s |
+| C++ interpreter | 0.97s |
+| Koka interpreter | 1.75s |
+| Koka PEG e1 | 1.95s |
 
 ## Further Reading
 
@@ -116,3 +100,39 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification
 - [docs/minimal_turing_languages.md](docs/minimal_turing_languages.md) — Survey of minimal Turing-complete languages (Minsky machines, λ-calculus, etc.)
 - [examples/](examples/) — All example programs for each language level
+
+## Appendix: Makefile Build (Legacy)
+
+The Makefile build uses system-installed compilers instead of hermetic toolchains.
+
+**Setup:**
+```bash
+source ./setup_makefile.sh    # Check/install Koka, detect build mode
+make                          # Build
+make test                     # Run tests
+make help                     # Show all options
+```
+
+**Run implementations:**
+```bash
+make koka-e1        # Koka interpreter (e1)
+make koka-peg-e0    # Koka PEG interpreter (e0)
+make koka-peg-e1    # Koka PEG interpreter (e1)
+make koka-peg-e2    # Koka PEG interpreter (e2)
+make koka-peg-e3    # Koka PEG interpreter (e3)
+make cpp-e1         # C++ interpreter
+make cpp-e1-cpp     # C++ compiler (C++ backend)
+make cpp-e1-llvm    # C++ compiler (LLVM native)
+make cpp-e1-llvmjit # C++ compiler (LLVM JIT)
+```
+
+**Benchmarks:**
+```bash
+make bench                         # default: 2000 iterations of 31!
+make bench BENCH_ARGS="100 20"     # custom: 100 iterations of 20!
+```
+
+**Native setup** installs Clang/LLVM and Koka on Linux (Fedora, Debian/Ubuntu) or macOS:
+```bash
+source ./setup_makefile.sh
+```

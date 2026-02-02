@@ -1,0 +1,34 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//:koka.bzl", "koka_binary")
+
+sh_test(
+    name = "e1_interp_test",
+    srcs = ["e1_test.sh"],
+    args = [
+        "$(location //src:e1)",
+        "$(location //src:e1_compile)",
+        "examples",
+    ],
+    data = [
+        "//src:e1",
+        "//src:e1_compile",
+        "//examples:e0_examples",
+        "//examples:e1_examples",
+    ],
+    timeout = "short",
+)
+
+# Koka PEG parser tests
+koka_binary(
+    name = "peg_test_bin",
+    main = "peg_test.koka",
+    srcs = ["peg_test.koka", "//src:peg.koka"],
+    deps = ["//src:peg.koka"],
+)
+
+sh_test(
+    name = "peg_test",
+    srcs = ["run_peg_test.sh"],
+    data = [":peg_test_bin"],
+    timeout = "short",
+)

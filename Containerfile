@@ -1,3 +1,4 @@
 FROM fedora:rawhide
 RUN dnf install -y clang llvm-devel clang-tools-extra tar && dnf clean all
 RUN curl -sSL https://github.com/koka-lang/koka/releases/download/v3.2.2/koka-v3.2.2-linux-x64.tar.gz | tar xz -C /usr/local
+RUN curl -fsSL https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64 -o /usr/local/bin/bazel && chmod +x /usr/local/bin/bazel

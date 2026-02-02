@@ -16,3 +16,7 @@ src/e1peg
 src/e2peg
 src/e3peg
 src/e1_rt_bigint.ll
+
+# Bazel
+bazel-*
+.bazel-cache

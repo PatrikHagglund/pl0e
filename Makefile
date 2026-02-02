@@ -2,13 +2,13 @@
 # - native: run commands directly on host (requires all tools installed)
 # - podman: use Podman containers (default if podman available)
 # - docker: use Docker containers (fallback if docker available)
-# - auto: automatically detect best option using setup.sh logic
+# - auto: automatically detect best option using setup_makefile.sh logic
 BUILD_MODE ?= auto
 
-# Auto-detection: use setup.sh if available, otherwise native
+# Auto-detection: use setup_makefile.sh if available, otherwise native
 ifeq ($(BUILD_MODE),auto)
-  ifneq ($(wildcard setup.sh),)
-    BUILD_MODE := $(shell ./setup.sh --detect 2>/dev/null || echo native)
+  ifneq ($(wildcard setup_makefile.sh),)
+    BUILD_MODE := $(shell ./setup_makefile.sh --detect 2>/dev/null || echo native)
   else
     BUILD_MODE := native
   endif

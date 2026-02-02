@@ -108,4 +108,33 @@ pub fun main(): <console, div, exn> ()
   val g19 = parse-peg("r = [a-z]+ { $0 }")
   test("inline action parses", peg-parse(g19, "r", "hello").is-just)
 
+  println("\n=== Static Analysis Tests ===\n")
+
+  // Common prefix detection
+  val g20 = parse-peg("r = \"a\" \"b\" / \"a\" \"c\"")
+  val w20 = warn-grammar(g20)
+  test("common prefix detected", w20.any(fn(w) w.contains("overlapping")))
+
+  val g21 = parse-peg("r = \"a\" / \"b\"")
+  val w21 = warn-grammar(g21)
+  test("no common prefix", !w21.any(fn(w) w.contains("overlapping")))
+
+  // Recursive lookahead detection
+  val g22 = parse-peg("r = &other \"x\"\nother = \"y\"")
+  val w22 = warn-grammar(g22)
+  test("recursive lookahead detected", w22.any(fn(w) w.contains("lookahead")))
+
+  val g23 = parse-peg("r = &\"(\" \"x\"")
+  val w23 = warn-grammar(g23)
+  test("no recursive lookahead", !w23.any(fn(w) w.contains("lookahead")))
+
+  // Right-recursion detection
+  val g24 = parse-peg("sum = num \"+\" sum / num\nnum = [0-9]+")
+  val w24 = warn-grammar(g24)
+  test("right-recursion detected", w24.any(fn(w) w.contains("right-recursive")))
+
+  val g25 = parse-peg("sum = num tail*\ntail = \"+\" num\nnum = [0-9]+")
+  val w25 = warn-grammar(g25)
+  test("no right-recursion", !w25.any(fn(w) w.contains("right-recursive")))
+
   println("\n=== Done ===")

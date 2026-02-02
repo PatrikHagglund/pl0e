@@ -273,10 +273,46 @@ The interpreter binaries support debugging flags:
 
 ```bash
 e3peg --dump              # Show parsed grammar rules
+e3peg --warn file.e3      # Show static analysis warnings
 e3peg --trace file.e3     # Trace execution
 ```
 
 The `show-grammar(g)` function returns a string representation of the parsed grammar, useful for verifying multi-line rules are parsed correctly.
+
+### Static Analysis
+
+The `--warn` flag runs static analysis on the grammar and reports potential performance issues. Three types of warnings are detected:
+
+**1. Overlapping FIRST sets in alternatives**
+```peg
+// Warning: alternatives have overlapping FIRST sets
+cmp_expr = l:sum_expr "==" _ r:sum_expr / sum_expr
+```
+Both alternatives can start with the same tokens, causing backtracking when the first alternative fails. Fix by left-factoring:
+```peg
+cmp_expr = sum_expr cmp_tail?
+cmp_tail = "==" _ sum_expr
+```
+
+**2. Recursive lookahead**
+```peg
+// Warning: lookahead contains rule reference
+ident = !keyword letter idchar*
+```
+Lookahead containing rule references can cause exponential behavior if the referenced rule is complex. This is often acceptable for simple rules like `keyword`, but problematic for recursive rules.
+
+**3. Right-recursive rules**
+```peg
+// Warning: right-recursive, consider left-factoring
+sum_expr = l:product "+" _ r:sum_expr / product
+```
+Right-recursive rules re-parse the left operand on backtrack. Fix by left-factoring:
+```peg
+sum_expr = product sum_tail*
+sum_tail = "+" _ product
+```
+
+Use `warn-grammar(g)` programmatically to get warnings as a list of strings.
 
 ### Nested List Handling
 

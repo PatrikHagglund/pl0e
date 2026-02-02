@@ -13,10 +13,6 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Next
 
-- PEG static analysis: warn about potential backtracking issues
-  - Detect rules with common prefixes in alternatives
-  - Warn about lookahead containing recursive rules
-  - Flag right-recursive rules that could be left-factored
 - PEG runtime monitoring: per-rule fuel stats, backtrack-to-success ratio
 - Create proper `rules_koka` for Bazel (library rule, dependency tracking, toolchain abstraction)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
@@ -31,6 +27,12 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- PEG static analysis: warn about potential backtracking issues (`--warn` flag)
+  - FIRST set computation using fixed-point iteration
+  - Detect overlapping FIRST sets in choice alternatives
+  - Warn about lookahead containing recursive rules
+  - Flag right-recursive rules that could be left-factored
+  - Tests in peg_test.koka, docs in PEG_SPEC.md
 - Fix e3 grammar exponential backtracking
   - Changed lambda syntax from `(params) -> body` to `\params -> body` (Haskell-style)
   - Refactored grammar to left-factored form to avoid re-parsing in binary operators

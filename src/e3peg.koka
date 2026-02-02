@@ -262,11 +262,22 @@ fun exec-safe(sv: semval, e: e3env): <div,console> e3env
     SVList(Cons(SVStmt(s), _)) -> exec(s, e)
     _ -> e
 
+fun parse-flags(args: list<string>): div (bool, bool, list<string>)
+  match args
+    Cons("--dump", rest) ->
+      val (_, w, r) = parse-flags(rest)
+      (True, w, r)
+    Cons("--warn", rest) ->
+      val (d, _, r) = parse-flags(rest)
+      (d, True, r)
+    Cons(x, rest) ->
+      val (d, w, r) = parse-flags(rest)
+      (d, w, Cons(x, r))
+    Nil -> (False, False, [])
+
 pub fun main()
   val args = get-args()
-  val (do-dump, rest-args) = match args
-    Cons("--dump", rest) -> (True, rest)
-    _ -> (False, args)
+  val (do-dump, do-warn, rest-args) = parse-flags(args)
 
   val prog-path = match rest-args { Cons(p, _) -> p; Nil -> "examples/example.e3" }
   val arg1-val = match rest-args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
@@ -278,6 +289,10 @@ pub fun main()
     println("loaded " ++ g.length.show ++ " rules")
     println(show-grammar(g))
     return ()
+  if do-warn then
+    val warnings = warn-grammar(g)
+    if warnings.is-empty then println("No warnings")
+    else warnings.foreach(fn(w) println("Warning: " ++ w))
   val prog = read-text-file(prog-path.path)
   println("e3: " ++ prog-path ++ " (" ++ prog.count.int/show ++ " chars)")
 

@@ -342,7 +342,7 @@ fun show-peg(p: peg): div string
   match p
     PLit(s) -> "\"" ++ s ++ "\""
     PAny -> "."
-    PClass(cs) -> "[...]"
+    PClass(_) -> "[...]"
     PRule(n) -> n
     PSeq(ps) -> "(" ++ ps.map(show-peg).join(" ") ++ ")"
     PChoice(ps) -> "(" ++ ps.map(show-peg).join(" / ") ++ ")"
@@ -367,6 +367,155 @@ fun collect-refs(p: peg): div list<string>
     PCapture(_, p1) -> collect-refs(p1)
     PAction(p1, _) -> collect-refs(p1)
     _ -> []
+
+// === Static Analysis (Warnings) ===
+
+// FIRST set element: what a pattern can start with
+pub type first-elem
+  FLit(s: string)
+  FClass(ranges: list<(char,char)>, negated: bool)
+  FAny
+
+pub alias first-set = list<first-elem>
+pub alias first-sets = list<(string, first-set)>
+
+// Check if two FIRST elements can overlap
+fun first-overlap(a: first-elem, b: first-elem): div bool
+  match a
+    FAny -> True
+    FLit(s1) -> match b
+      FAny -> True
+      FLit(s2) -> s1 != "" && s2 != "" && s1.list.head == s2.list.head
+      FClass(ranges, neg) -> match s1.list.head { Just(c) -> in-class(c, ranges, neg); Nothing -> False }
+    FClass(ranges, neg) -> match b
+      FAny -> True
+      FLit(s) -> match s.list.head { Just(c) -> in-class(c, ranges, neg); Nothing -> False }
+      FClass(_, _) -> True  // Conservative: assume character classes can overlap
+
+fun first-sets-overlap(a: first-set, b: first-set): div bool
+  a.any(fn(x) b.any(fn(y) first-overlap(x, y)))
+
+// Compute FIRST set for a pattern
+fun compute-first(nulls: nullable-set, firsts: first-sets, p: peg): div first-set
+  match p
+    PLit(s) -> if s == "" then [] else [FLit(s)]
+    PAny -> [FAny]
+    PClass(ranges, neg) -> [FClass(ranges, neg)]
+    PRule(n) -> firsts.filter(fn(x) x.fst == n).head.map(snd).default([])
+    PSeq(Nil) -> []
+    PSeq(Cons(first, rest)) ->
+      val f = compute-first(nulls, firsts, first)
+      if is-nullable-with(nulls, first) then f ++ compute-first(nulls, firsts, PSeq(rest)) else f
+    PChoice(ps) -> ps.flatmap(fn(p1) compute-first(nulls, firsts, p1))
+    PStar(p1) -> compute-first(nulls, firsts, p1)
+    PPlus(p1) -> compute-first(nulls, firsts, p1)
+    POpt(p1) -> compute-first(nulls, firsts, p1)
+    PNot(_) -> []
+    PAnd(p1) -> compute-first(nulls, firsts, p1)
+    PCapture(_, p1) -> compute-first(nulls, firsts, p1)
+    PAction(p1, _) -> compute-first(nulls, firsts, p1)
+
+// Compute FIRST sets for all rules using fixed-point iteration
+fun compute-first-sets(g: grammar, nulls: nullable-set): div first-sets
+  fun iterate(firsts: first-sets): div first-sets
+    val new-firsts = g.map fn(r)
+      (r.fst, compute-first(nulls, firsts, r.snd))
+    if new-firsts.all(fn(nf) firsts.any(fn(of) of.fst == nf.fst && of.snd.length == nf.snd.length))
+    then firsts else iterate(new-firsts)
+  iterate(g.map(fn(r) (r.fst, [])))
+
+// Check if pattern contains rule references
+fun has-rule-ref(p: peg): div bool
+  match p
+    PRule(_) -> True
+    PSeq(ps) -> ps.any(has-rule-ref)
+    PChoice(ps) -> ps.any(has-rule-ref)
+    PStar(p1) -> has-rule-ref(p1)
+    PPlus(p1) -> has-rule-ref(p1)
+    POpt(p1) -> has-rule-ref(p1)
+    PNot(p1) -> has-rule-ref(p1)
+    PAnd(p1) -> has-rule-ref(p1)
+    PCapture(_, p1) -> has-rule-ref(p1)
+    PAction(p1, _) -> has-rule-ref(p1)
+    _ -> False
+
+// Find recursive lookahead patterns
+fun find-recursive-lookahead(rule-name: string, p: peg): div list<string>
+  match p
+    PAnd(p1) ->
+      if has-rule-ref(p1) then [rule-name ++ ": lookahead contains rule reference"]
+      else find-recursive-lookahead(rule-name, p1)
+    PNot(p1) ->
+      if has-rule-ref(p1) then [rule-name ++ ": negative lookahead contains rule reference"]
+      else find-recursive-lookahead(rule-name, p1)
+    PSeq(ps) -> ps.flatmap(fn(p1) find-recursive-lookahead(rule-name, p1))
+    PChoice(ps) -> ps.flatmap(fn(p1) find-recursive-lookahead(rule-name, p1))
+    PStar(p1) -> find-recursive-lookahead(rule-name, p1)
+    PPlus(p1) -> find-recursive-lookahead(rule-name, p1)
+    POpt(p1) -> find-recursive-lookahead(rule-name, p1)
+    PCapture(_, p1) -> find-recursive-lookahead(rule-name, p1)
+    PAction(p1, _) -> find-recursive-lookahead(rule-name, p1)
+    _ -> []
+
+// Find common prefixes in choice alternatives
+fun find-common-prefixes(nulls: nullable-set, firsts: first-sets, rule-name: string, p: peg): div list<string>
+  match p
+    PChoice(ps) ->
+      val alt-firsts = ps.map(fn(p1) compute-first(nulls, firsts, p1))
+      val overlaps = check-pairwise-overlap(alt-firsts, 0)
+      val inner = ps.flatmap(fn(p1) find-common-prefixes(nulls, firsts, rule-name, p1))
+      if overlaps then Cons(rule-name ++ ": alternatives have overlapping FIRST sets", inner) else inner
+    PSeq(ps) -> ps.flatmap(fn(p1) find-common-prefixes(nulls, firsts, rule-name, p1))
+    PStar(p1) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    PPlus(p1) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    POpt(p1) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    PNot(p1) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    PAnd(p1) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    PCapture(_, p1) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    PAction(p1, _) -> find-common-prefixes(nulls, firsts, rule-name, p1)
+    _ -> []
+
+fun check-pairwise-overlap(sets: list<first-set>, idx: int): div bool
+  match sets
+    Nil -> False
+    Cons(_, Nil) -> False
+    Cons(a, rest) -> rest.any(fn(b) first-sets-overlap(a, b)) || check-pairwise-overlap(rest, idx + 1)
+
+// Find right-recursive rules that could be left-factored
+fun find-right-recursion(rule-name: string, p: peg): div list<string>
+  match p
+    PChoice(ps) ->
+      val inner = ps.flatmap(fn(p1) find-right-recursion(rule-name, p1))
+      // Check if any alternative ends with self-recursion while another is a prefix
+      val has-self-rec = ps.any(fn(p1) ends-with-rule(p1, rule-name))
+      val has-prefix = ps.any(fn(p1) !ends-with-rule(p1, rule-name))
+      if has-self-rec && has-prefix
+      then Cons(rule-name ++ ": right-recursive, consider left-factoring", inner)
+      else inner
+    PSeq(ps) -> ps.flatmap(fn(p1) find-right-recursion(rule-name, p1))
+    PStar(p1) -> find-right-recursion(rule-name, p1)
+    PPlus(p1) -> find-right-recursion(rule-name, p1)
+    POpt(p1) -> find-right-recursion(rule-name, p1)
+    PCapture(_, p1) -> find-right-recursion(rule-name, p1)
+    PAction(p1, _) -> find-right-recursion(rule-name, p1)
+    _ -> []
+
+fun ends-with-rule(p: peg, name: string): div bool
+  match p
+    PRule(n) -> n == name
+    PSeq(ps) -> match ps.reverse { Cons(last, _) -> ends-with-rule(last, name); Nil -> False }
+    PCapture(_, p1) -> ends-with-rule(p1, name)
+    PAction(p1, _) -> ends-with-rule(p1, name)
+    _ -> False
+
+// Public API: collect all warnings for a grammar
+pub fun warn-grammar(g: grammar): div list<string>
+  val nulls = compute-nullable(g)
+  val firsts = compute-first-sets(g, nulls)
+  val prefix-warns = g.flatmap(fn(r) find-common-prefixes(nulls, firsts, r.fst, r.snd))
+  val lookahead-warns = g.flatmap(fn(r) find-recursive-lookahead(r.fst, r.snd))
+  val rightrec-warns = g.flatmap(fn(r) find-right-recursion(r.fst, r.snd))
+  prefix-warns ++ lookahead-warns ++ rightrec-warns
 
 // === PEG Interpreter ===
 alias pstate = sslice

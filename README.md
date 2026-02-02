@@ -97,7 +97,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 
 - [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
-- [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification
+- [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification, static analysis (`--warn` flag)
 - [docs/minimal_turing_languages.md](docs/minimal_turing_languages.md) — Survey of minimal Turing-complete languages (Minsky machines, λ-calculus, etc.)
 - [examples/](examples/) — All example programs for each language level
 

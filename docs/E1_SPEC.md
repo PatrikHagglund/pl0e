@@ -36,7 +36,7 @@ letter      = [a-zA-Z]
 digit       = [0-9]
 
 _           = ([ \t\n\r] / comment)*
-comment     = "//" [^\n]* / "/*" (!"*/" .)* "*/"
+comment     = "//" [^\n]*
 ```
 
 ### Lexical Elements
@@ -46,7 +46,7 @@ comment     = "//" [^\n]* / "/*" (!"*/" .)* "*/"
 - **Keywords**: `loop`, `break_ifz`, `print`
 - **Operators**: `+`, `-`, `:=`, `:`
 - **Delimiters**: `{`, `}`, `(`, `)`, `;` (optional)
-- **Comments**: `//` to end of line, `/* */` block comments
+- **Comments**: `//` to end of line
 
 ## Semantics
 

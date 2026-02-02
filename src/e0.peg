@@ -23,10 +23,12 @@ atom       = int_lit
            / "(" _ e:expression ")" _ { $e }
 
 int_lit    = digit+ _ { Int($0) }
-ident      = letter idchar* _ { Ident($0) }
+
+keyword    = "print" !idchar
+ident      = !keyword letter idchar* _ { Ident($0) }
 idchar     = [a-zA-Z0-9_]
 letter     = [a-zA-Z]
 digit      = [0-9]
 
 _          = ([ \t\n\r] / comment)*
-comment    = "//" [^\n]* / "/*" (!"*/" .)* "*/"
+comment    = "//" [^\n]*

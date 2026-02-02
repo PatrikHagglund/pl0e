@@ -33,11 +33,11 @@ block           = "{" _ (statement ";"? _)* expression? "}" _
 binding         = ident _ ":" _ type_expr? ("=" _ expression)?
                 / lvalue _ ":=" _ expression
 lvalue          = ident accessor+
-accessor        = hs atom / "." _ (int_lit / ident)
+accessor        = __ atom / "." _ (int_lit / ident)
 
 // Type Expressions
 type_expr       = func_type / array_type / record_type / basic_type / ident
-basic_type      = ("int" / "bool" / "unit") !alnum _
+basic_type      = ("int" / "bool" / "unit") !idchar _
 array_type      = "[" _ type_expr _ "]" _
 record_type     = "{" _ record_type_fields? "}" _
 record_type_fields = param ("," _ param)* ("," _)?
@@ -63,7 +63,7 @@ product         = unary (("*" / "/" / "%") _ unary)*
 unary           = "-"? apply_expr
 
 // Application: juxtaposition or dot
-apply_expr      = atom (hs atom / "." _ (int_lit / ident))*
+apply_expr      = atom (__ atom / "." _ (int_lit / ident))*
 tuple_items     = expression ("," _ expression)* ("," _)?
 array_items     = (expression ";" _)+
 
@@ -78,8 +78,8 @@ field_init      = ident _ ":" _ expression
 literal         = unit_lit / int_lit / bool_lit / func_lit
 unit_lit        = "()" _
 int_lit         = digit+ _
-bool_lit        = ("true" / "false") !alnum _
-func_lit        = "(" _ params? ")" _ "->" _ expression
+bool_lit        = ("true" / "false") !idchar _
+func_lit        = "\\" _ params? "->" _ expression
 params          = param ("," _ param)* ("," _)?
 param           = ident _ ":" _ type_expr
 

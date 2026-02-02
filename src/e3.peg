@@ -48,14 +48,14 @@ apply_expr      = atom (__ atom)* _
 atom            = int_lit / bool_lit / paren_expr / id:ident { Var($id) } / block
 paren_expr      = "(" _ e:expression ")" { $e }
 
-int_lit         = digit+ { Int($0) }
+int_lit         = digit+ _ { Int($0) }
 bool_lit        = "true" !idchar { True }
                 / "false" !idchar { False }
 func_lit        = "\\" _ p:params? "->" _ body:expression { Func($p, $body) }
 params          = ident _ ("," _ ident _)* ","? _ { Params }
 
 keyword         = ("case" / "loop" / "break" / "true" / "false" / "print") !idchar
-ident           = !keyword letter idchar* { Ident($0) }
+ident           = !keyword letter idchar* _ { Ident($0) }
 idchar          = [a-zA-Z0-9_]
 letter          = [a-zA-Z]
 digit           = [0-9]

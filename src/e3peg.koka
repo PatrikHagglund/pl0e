@@ -1,5 +1,10 @@
 // PL/0 Level 3 interpreter using PEG grammar
 // Refactored grammar with left-factored rules to avoid backtracking
+//
+// Note: Does not use pegeval.koka because e3 needs:
+// - Multi-type values (int, bool, closure) vs pegeval's int-only
+// - AST construction for closures that capture environment at runtime
+// - Custom evaluation that threads e3env through function application
 
 module e3peg
 

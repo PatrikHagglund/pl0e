@@ -38,4 +38,4 @@ letter          = [a-zA-Z]
 digit           = [0-9]
 
 _               = ([ \t\n\r] / comment)*
-comment         = "//" [^\n]* / "/*" (!"*/" .)* "*/"
+comment         = "//" [^\n]*

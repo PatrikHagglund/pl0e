@@ -13,6 +13,10 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Next
 
+- Implement e4peg interpreter (arrays, pattern matching)
+- Implement e5peg interpreter (records, unit)
+- Implement e6peg interpreter (static typing)
+- Add CI workflow (GitHub Actions)
 - Create proper `rules_koka` for Bazel (library rule, dependency tracking, toolchain abstraction)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Explore efficient interpreters (Graal/Truffle, simple JIT)

@@ -17,7 +17,6 @@ Explore simple language design/implementation inspired by PL/0.
 - Implement e5peg interpreter (records, unit)
 - Implement e6peg interpreter (static typing)
 - Add CI workflow (GitHub Actions)
-- Create proper `rules_koka` for Bazel (library rule, dependency tracking, toolchain abstraction)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Explore efficient interpreters (Graal/Truffle, simple JIT)
 - Standard library?
@@ -30,6 +29,14 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- Create proper `rules_koka` for Bazel
+  - Standalone module in `rules_koka/` with own MODULE.bazel
+  - `koka_library` rule for dependency tracking (collects sources)
+  - `koka_binary` rule compiles all transitive sources together
+  - Proper toolchain abstraction via `koka_toolchain` rule
+  - Module extension for bzlmod (`koka_ext.toolchain()`)
+  - Uses hermetic Clang from toolchains_llvm_bootstrapped
+  - Note: Koka requires source files for imports, not just .kki files
 - Left-factor e0/e1/e2 grammars (sum_expr, product, cmp_expr)
   - e2 sum_expr: 95k → 1.6k fuel (57x improvement)
   - Eliminates right-recursion warnings from static analysis

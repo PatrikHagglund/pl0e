@@ -8,8 +8,13 @@ bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.4.1")
 register_toolchains("@toolchains_llvm_bootstrapped//toolchain:all")
 
 # Hermetic Koka toolchain
-koka_ext = use_extension("//:koka.bzl", "koka_ext")
+bazel_dep(name = "rules_koka", version = "0.1.0")
+local_path_override(module_name = "rules_koka", path = "rules_koka")
+
+koka_ext = use_extension("@rules_koka//:extensions.bzl", "koka_ext")
+koka_ext.toolchain()
 use_repo(koka_ext, "koka")
+register_toolchains("@koka//:toolchain")
 
 # Extra LLVM tools (lli, llvm-link) via toolchains_llvm
 # Uses statically-linked binaries - no GLIBCXX dependency

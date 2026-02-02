@@ -1,5 +1,5 @@
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
-load("//:koka.bzl", "koka_binary")
+load("@rules_koka//koka:defs.bzl", "koka_binary")
 
 sh_test(
     name = "e1_interp_test",
@@ -22,8 +22,8 @@ sh_test(
 koka_binary(
     name = "peg_test_bin",
     main = "peg_test.koka",
-    srcs = ["peg_test.koka", "//src:peg.koka"],
-    deps = ["//src:peg.koka"],
+    srcs = ["peg_test.koka"],
+    deps = ["//src:peg_lib"],
 )
 
 sh_test(

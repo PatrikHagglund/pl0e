@@ -221,19 +221,6 @@
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
-    "//:koka.bzl%koka_ext": {
-      "general": {
-        "bzlTransitiveDigest": "PyKcqclqR5MQbqb4oQoggYuoRL9cY2hcM3lLW7Ed9EI=",
-        "usagesDigest": "agHJIVcH8IfchU/WZAXdZpB4Ial+fnzfGWRWyjR5/yQ=",
-        "recordedInputs": [],
-        "generatedRepoSpecs": {
-          "koka": {
-            "repoRuleId": "@@//:koka.bzl%koka_repo",
-            "attributes": {}
-          }
-        }
-      }
-    },
     "@@pybind11_bazel+//:internal_configure.bzl%internal_configure_extension": {
       "general": {
         "bzlTransitiveDigest": "06cynZ1bCvvy8zHPrrDlXq+Z68xmjctHpfFxi+zEpJY=",
@@ -251,6 +238,21 @@
               "urls": [
                 "https://github.com/pybind/pybind11/archive/v2.12.0.zip"
               ]
+            }
+          }
+        }
+      }
+    },
+    "@@rules_koka+//:extensions.bzl%koka_ext": {
+      "general": {
+        "bzlTransitiveDigest": "3md2rEP8eaav7POS3BQpim9lHkrVNWfXxWrHNleDtws=",
+        "usagesDigest": "hSrwouaNqiLAIy9zE6dv8jlth9dXoJefT3kjK/+p+do=",
+        "recordedInputs": [],
+        "generatedRepoSpecs": {
+          "koka": {
+            "repoRuleId": "@@rules_koka+//koka/private:repo.bzl%_koka_repo",
+            "attributes": {
+              "version": "3.2.2"
             }
           }
         }

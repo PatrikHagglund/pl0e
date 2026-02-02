@@ -1,20 +1,33 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
-load("//:koka.bzl", "koka_binary")
+load("@rules_koka//koka:defs.bzl", "koka_binary", "koka_library")
 
-# Koka PEG interpreters - hermetic build (no system koka required)
+# Shared libraries
+koka_library(
+    name = "peg_lib",
+    srcs = ["peg.koka"],
+    visibility = ["//test:__pkg__"],
+)
+
+koka_library(
+    name = "pegeval_lib",
+    srcs = ["pegeval.koka"],
+    deps = [":peg_lib"],
+)
+
+# Koka PEG interpreters
 koka_binary(
     name = "e0peg",
     main = "e0peg.koka",
-    srcs = ["e0peg.koka", "peg.koka", "pegeval.koka"],
-    deps = ["peg.koka", "pegeval.koka"],
+    srcs = ["e0peg.koka"],
+    deps = [":peg_lib", ":pegeval_lib"],
     visibility = ["//visibility:public"],
 )
 
 koka_binary(
     name = "e1peg",
     main = "e1peg.koka",
-    srcs = ["e1peg.koka", "peg.koka", "pegeval.koka"],
-    deps = ["peg.koka", "pegeval.koka"],
+    srcs = ["e1peg.koka"],
+    deps = [":peg_lib", ":pegeval_lib"],
     data = ["e1.peg"],
     visibility = ["//visibility:public"],
 )
@@ -22,8 +35,8 @@ koka_binary(
 koka_binary(
     name = "e2peg",
     main = "e2peg.koka",
-    srcs = ["e2peg.koka", "peg.koka", "pegeval.koka"],
-    deps = ["peg.koka", "pegeval.koka"],
+    srcs = ["e2peg.koka"],
+    deps = [":peg_lib", ":pegeval_lib"],
     data = ["e2.peg"],
     visibility = ["//visibility:public"],
 )
@@ -31,18 +44,23 @@ koka_binary(
 koka_binary(
     name = "e3peg",
     main = "e3peg.koka",
-    srcs = ["e3peg.koka", "peg.koka"],
-    deps = ["peg.koka"],
+    srcs = ["e3peg.koka"],
+    deps = [":peg_lib"],
     data = ["e3.peg"],
     visibility = ["//visibility:public"],
 )
 
 # Hand-written Koka interpreter (two-phase: parse to AST, then evaluate)
+koka_library(
+    name = "e1_koka_lib",
+    srcs = ["e1-types.koka", "e1-parser.koka", "e1-eval.koka"],
+)
+
 koka_binary(
     name = "e1_koka",
     main = "e1.koka",
-    srcs = ["e1.koka", "e1-types.koka", "e1-parser.koka", "e1-eval.koka"],
-    deps = ["e1-types.koka", "e1-parser.koka", "e1-eval.koka"],
+    srcs = ["e1.koka"],
+    deps = [":e1_koka_lib"],
     visibility = ["//visibility:public"],
 )
 

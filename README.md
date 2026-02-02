@@ -6,9 +6,9 @@ This project explores the design and implementation of simple programming langua
 
 Currently in an initial work-in-progress state.
 - e1 has a [language specification](docs/E1_SPEC.md), two [Koka](https://koka-lang.github.io/) interpreters (AST-based and [PEG](https://en.wikipedia.org/wiki/Parsing_expression_grammar) with actions), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
-- e0, e2, and e3 have PEG interpreters in Koka
+- e0, e2, e3, and e4 have PEG interpreters in Koka
 - Benchmarks for levels 1, 2, and 3
-- e4 through e6 have PEG grammars and example files, but no interpreters yet
+- e5 and e6 have PEG grammars and example files, but no interpreters yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
 
 **Philosophy:**
@@ -60,6 +60,10 @@ Each level is a strict superset of the previous.
 - [factorial.e3](examples/factorial.e3) — Factorial benchmark (e3)
 - [collatz.e3](examples/collatz.e3) — Collatz sequence (e3)
 - [gcd.e3](examples/gcd.e3) — Euclidean algorithm (e3)
+- [example.e4](examples/example.e4) — Arrays and pattern matching (e4)
+- [factorial.e4](examples/factorial.e4) — Factorial benchmark (e4)
+- [collatz.e4](examples/collatz.e4) — Collatz sequence (e4)
+- [gcd.e4](examples/gcd.e4) — Euclidean algorithm with arrays (e4)
 
 ## Implementations
 
@@ -69,6 +73,7 @@ Each level is a strict superset of the previous.
 | Koka (PEG meta-interpreter) | `peg.koka`, `e1peg.koka` | Single-phase parse+execute, no AST |
 | Koka (PEG, e2) | `peg.koka`, `e2peg.koka` | e2 with case/comparisons/mul-div |
 | Koka (PEG, e3) | `peg.koka`, `e3peg.koka` | e3 with booleans/closures |
+| Koka (PEG, e4) | `peg.koka`, `e4peg.koka` | e4 with arrays/pattern matching |
 | C++ interpreter | `e1.cpp`, `e1.hpp` | Handwritten, AST used |
 | Compiler in C++ | `e1_compile.cpp`, `e1.hpp` | C++ or LLVM IR backend |
 

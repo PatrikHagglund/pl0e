@@ -44,17 +44,23 @@ product_tail    = "*" _ unary { Mul }
 unary           = "-" _ e:apply_expr { Neg($e) }
                 / apply_expr
 
-apply_expr      = atom (__ atom)* _
+// Note: atom_raw doesn't consume trailing whitespace, apply_expr handles it
+apply_expr      = atom_raw (__ atom_raw)* _
+atom_raw        = int_lit_raw / bool_lit_raw / paren_expr / id:ident_raw { Var($id) } / block
 atom            = int_lit / bool_lit / paren_expr / id:ident { Var($id) } / block
 paren_expr      = "(" _ e:expression ")" { $e }
 
+int_lit_raw     = digit+ { Int($0) }
 int_lit         = digit+ _ { Int($0) }
-bool_lit        = "true" !idchar { True }
+bool_lit_raw    = "true" !idchar { True }
                 / "false" !idchar { False }
+bool_lit        = "true" !idchar _ { True }
+                / "false" !idchar _ { False }
 func_lit        = "\\" _ p:params? "->" _ body:expression { Func($p, $body) }
 params          = ident _ ("," _ ident _)* ","? _ { Params }
 
 keyword         = ("case" / "loop" / "break" / "true" / "false" / "print") !idchar
+ident_raw       = !keyword letter idchar* { Ident($0) }
 ident           = !keyword letter idchar* _ { Ident($0) }
 idchar          = [a-zA-Z0-9_]
 letter          = [a-zA-Z]

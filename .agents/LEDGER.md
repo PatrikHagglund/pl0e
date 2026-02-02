@@ -13,7 +13,6 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Next
 
-- Implement e4peg interpreter (arrays, pattern matching)
 - Implement e5peg interpreter (records, unit)
 - Implement e6peg interpreter (static typing)
 - Add CI workflow (GitHub Actions)
@@ -29,6 +28,10 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- Implement e4peg interpreter (arrays, pattern matching)
+  - Arrays stored as Koka vectors for O(1) indexed access
+  - Pattern matching: exact-length `(a; b;)` and prefix `(a; b; _)`
+  - Fixed whitespace bug in apply_expr for e3 and e4 grammars
 - Create proper `rules_koka` for Bazel
   - Standalone module in `rules_koka/` with own MODULE.bazel
   - `koka_library` rule for dependency tracking (collects sources)

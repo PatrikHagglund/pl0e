@@ -1,6 +1,6 @@
 # PL/0 Implementations
 
-Interpreters and compilers for e0–e3.
+Interpreters and compilers for e0–e4.
 
 ## Overview
 
@@ -10,6 +10,7 @@ Interpreters and compilers for e0–e3.
 | `e1peg.koka` | Koka | Interpreter | e1 | Koka bigint |
 | `e2peg.koka` | Koka | Interpreter | e2 | Koka bigint |
 | `e3peg.koka` | Koka | Interpreter | e3 | Koka bigint |
+| `e4peg.koka` | Koka | Interpreter | e4 | Koka bigint |
 | `e1.cpp` | C++ | Interpreter | e1 | Configurable |
 | `e1_compile.cpp` | C++ | Compiler | e1 | Configurable |
 
@@ -45,6 +46,13 @@ Extends e2 with booleans, closures, and case expressions. Uses a separate interp
 
 ```bash
 bazel run //src:e3peg -- examples/factorial.e3
+```
+
+**`e4peg.koka` — Single-Phase (e4):**
+Extends e3 with arrays and pattern matching. Arrays are stored as Koka vectors for O(1) indexed access. Pattern matching supports exact-length array patterns `(a; b;)` and prefix patterns `(a; b; _)`.
+
+```bash
+bazel run //src:e4peg -- examples/factorial.e4
 ```
 
 **Known limitations:**
@@ -207,6 +215,7 @@ src/
   e1peg.koka       — Koka PEG interpreter (e1, ~20 lines)
   e2peg.koka       — Koka PEG interpreter (e2, ~50 lines)
   e3peg.koka       — Koka PEG interpreter (e3, closures/booleans)
+  e4peg.koka       — Koka PEG interpreter (e4, arrays/pattern matching)
   e0peg.koka       — Koka PEG interpreter (e0, ~20 lines)
   pegeval.koka     — Shared PEG interpreter runtime
   peg.koka         — Generic PEG parser

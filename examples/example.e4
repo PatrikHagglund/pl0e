@@ -6,8 +6,8 @@ nums := (1; 2; 3;)
 second := nums.1
 first :
 first := case nums {
-  (h; _;) -> h,
-  _       -> 0
+  (h; _) -> h,
+  _      -> 0
 }
 
 // --- Records as fixed-position arrays ---
@@ -29,9 +29,10 @@ nothing := ()
 
 // --- Record pattern matching via array patterns ---
 get_x :
-get_x := (p) -> case p {
-  (x; _;) -> x,
-  _       -> 0
+get_x := \p -> case p {
+  (x; _) -> x,
+  _      -> 0
 }
 
 result := get_x point  // 10
+print result

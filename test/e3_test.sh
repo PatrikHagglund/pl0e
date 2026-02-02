@@ -66,10 +66,10 @@ check "case_stmt" "$E3 $TMP" "20"
 echo -e 'i := 3\nloop { case { i == 0 -> { break } true -> { print i\n i := i - 1 } } }' > "$TMP"
 check "loop_break" "$E3 $TMP" "3 2 1"
 
-echo -e 'f := (x) -> x + 1\nprint f 5' > "$TMP"
+echo -e 'f := \\x -> x + 1\nprint f 5' > "$TMP"
 check "closure" "$E3 $TMP" "6"
 
-echo -e 'add := (x) -> (y) -> x + y\nprint add 3 4' > "$TMP"
+echo -e 'add := \\x -> \\y -> x + y\nprint add 3 4' > "$TMP"
 check "closure_curry" "$E3 $TMP" "7"
 
 rm -f "$TMP"

@@ -26,6 +26,9 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- Left-factor e0/e1/e2 grammars (sum_expr, product, cmp_expr)
+  - e2 sum_expr: 95k → 1.6k fuel (57x improvement)
+  - Eliminates right-recursion warnings from static analysis
 - PEG dynamic analysis: runtime statistics (`--stats` flag)
   - Per-rule call count, fuel consumption, backtrack count
   - Success% metric to identify inefficient rules

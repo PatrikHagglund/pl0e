@@ -20,9 +20,9 @@ binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
                 / id:ident _ ":" { Decl($id) }
 
 expression      = sum_expr
-sum_expr        = l:unary "+" _ r:sum_expr { Add($l, $r) }
-                / l:unary "-" _ r:sum_expr { Sub($l, $r) }
-                / unary
+sum_expr        = unary sum_tail*
+sum_tail        = "+" _ unary { Add }
+                / "-" _ unary { Sub }
 unary           = "-" _ e:atom { Neg($e) }
                 / atom
 atom            = int_lit

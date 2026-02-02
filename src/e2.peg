@@ -16,20 +16,20 @@ binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
                 / id:ident _ ":" { Decl($id) }
 
 expression      = cmp_expr
-cmp_expr        = l:sum_expr "==" _ r:sum_expr { Eq($l, $r) }
-                / l:sum_expr "!=" _ r:sum_expr { Ne($l, $r) }
-                / l:sum_expr "<=" _ r:sum_expr { Le($l, $r) }
-                / l:sum_expr ">=" _ r:sum_expr { Ge($l, $r) }
-                / l:sum_expr "<" _ r:sum_expr { Lt($l, $r) }
-                / l:sum_expr ">" _ r:sum_expr { Gt($l, $r) }
-                / sum_expr
-sum_expr        = l:product "+" _ r:sum_expr { Add($l, $r) }
-                / l:product "-" _ r:sum_expr { Sub($l, $r) }
-                / product
-product         = l:unary "*" _ r:product { Mul($l, $r) }
-                / l:unary "/" _ r:product { Div($l, $r) }
-                / l:unary "%" _ r:product { Mod($l, $r) }
-                / unary
+cmp_expr        = sum_expr cmp_tail?
+cmp_tail        = "==" _ sum_expr { Eq }
+                / "!=" _ sum_expr { Ne }
+                / "<=" _ sum_expr { Le }
+                / ">=" _ sum_expr { Ge }
+                / "<" _ sum_expr { Lt }
+                / ">" _ sum_expr { Gt }
+sum_expr        = product sum_tail*
+sum_tail        = "+" _ product { Add }
+                / "-" _ product { Sub }
+product         = unary product_tail*
+product_tail    = "*" _ unary { Mul }
+                / "/" _ unary { Div }
+                / "%" _ unary { Mod }
 unary           = "-" _ e:atom { Neg($e) }
                 / atom
 atom            = int_lit

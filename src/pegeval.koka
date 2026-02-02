@@ -33,6 +33,7 @@ pub type semval<x>
   SVIdent(s: string)
   SVList(vs: list<semval<x>>)
   SVExt(ext: x)
+  SVBinopTail(op: string, rhs: (penv) -> <div> int)
 
 // Flatten nested SVList wrappers (2 levels needed for grammar rules like
 // `(statement ";"? _)*` which nest: repetition wraps group wraps elements).
@@ -43,6 +44,29 @@ pub fun flatten-sv(vs: list<semval<x>>): list<semval<x>>
   vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
     .flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
 
+// Fold binary operation tails: base op1 rhs1 op2 rhs2 ... -> ((base op1 rhs1) op2 rhs2) ...
+fun fold-binop-tails(base, tails: list<semval<x>>)
+  match tails
+    Nil -> base
+    Cons(SVBinopTail(op, rhs), rest) ->
+      fold-binop-tails(fn(e) apply-binop(op, base(e), rhs(e)), rest)
+    Cons(_, rest) -> fold-binop-tails(base, rest)
+
+fun apply-binop(op: string, l: int, r: int): int
+  match op
+    "+" -> l + r
+    "-" -> l - r
+    "*" -> l * r
+    "/" -> if r == 0 then 0 else l / r
+    "%" -> if r == 0 then 0 else l % r
+    "==" -> if l == r then 1 else 0
+    "!=" -> if l != r then 1 else 0
+    "<" -> if l < r then 1 else 0
+    ">" -> if l > r then 1 else 0
+    "<=" -> if l <= r then 1 else 0
+    ">=" -> if l >= r then 1 else 0
+    _ -> 0
+
 // Base constructor handling - call from your action handler
 pub fun handle-base(name: string, txt: string, children: list<semval<x>>): maybe<semval<x>>
   if name == "_text" then Just(SVIdent(txt))
@@ -51,6 +75,19 @@ pub fun handle-base(name: string, txt: string, children: list<semval<x>>): maybe
   elif name == "_str" then Just(SVIdent(txt))
   elif name == "_cons" then handle-cons(txt, children)
   elif name == "_lit" then Just(SVList(children))
+  // Handle left-factored rules: base tail*
+  elif name == "sum_expr" || name == "product" then
+    val flat = flatten-sv(children)
+    match flat
+      Cons(SVExpr(base), rest) -> Just(SVExpr(fold-binop-tails(base, rest)))
+      _ -> Just(SVList(flat))
+  // Handle comparison: base tail?
+  elif name == "cmp_expr" then
+    val flat = flatten-sv(children)
+    match flat
+      Cons(SVExpr(base), Cons(SVBinopTail(op, rhs), _)) -> Just(SVExpr(fn(e) apply-binop(op, base(e), rhs(e))))
+      Cons(SVExpr(base), _) -> Just(SVExpr(base))
+      _ -> Just(SVList(flat))
   else match children
     Cons(c, Nil) -> Just(c)
     _ -> Just(SVList(children))
@@ -75,12 +112,18 @@ fun handle-cons(txt: string, children: list<semval<x>>): maybe<semval<x>>
     "Var" -> match children
       Cons(SVIdent(id), _) -> Just(SVExpr(fn(e) env-get(e, id)))
       _ -> Just(SVExpr(fn(_) 0))
-    "Add" -> match children
-      Cons(SVExpr(l), Cons(SVExpr(r), _)) -> Just(SVExpr(fn(e) l(e) + r(e)))
-      _ -> Just(SVExpr(fn(_) 0))
-    "Sub" -> match children
-      Cons(SVExpr(l), Cons(SVExpr(r), _)) -> Just(SVExpr(fn(e) l(e) - r(e)))
-      _ -> Just(SVExpr(fn(_) 0))
+    // Binop tails for left-factored rules
+    "Add" -> make-binop-tail("+", children)
+    "Sub" -> make-binop-tail("-", children)
+    "Mul" -> make-binop-tail("*", children)
+    "Div" -> make-binop-tail("/", children)
+    "Mod" -> make-binop-tail("%", children)
+    "Eq" -> make-binop-tail("==", children)
+    "Ne" -> make-binop-tail("!=", children)
+    "Lt" -> make-binop-tail("<", children)
+    "Gt" -> make-binop-tail(">", children)
+    "Le" -> make-binop-tail("<=", children)
+    "Ge" -> make-binop-tail(">=", children)
     "Neg" -> match children
       Cons(SVExpr(f), _) -> Just(SVExpr(fn(e) 0 - f(e)))
       _ -> Just(SVExpr(fn(_) 0))
@@ -95,6 +138,12 @@ fun handle-cons(txt: string, children: list<semval<x>>): maybe<semval<x>>
       val stmts = flatten-sv(match children { Cons(SVList(vs), _) -> vs; _ -> children })
         .filter(fn(c) match c { SVStmt(_) -> True; _ -> False })
       Just(SVStmt(fn(e) stmts.foldl(e, fn(acc, s) match s { SVStmt(f) -> f(acc); _ -> acc })))
+    _ -> Nothing
+
+fun make-binop-tail(op: string, children: list<semval<x>>): maybe<semval<x>>
+  val flat = flatten-sv(children)
+  match flat
+    Cons(SVExpr(rhs), _) -> Just(SVBinopTail(op, rhs))
     _ -> Nothing
 
 // Generic exec-safe

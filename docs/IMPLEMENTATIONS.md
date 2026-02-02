@@ -212,27 +212,6 @@ src/
   peg.koka         — Generic PEG parser
 ```
 
-## Benchmarks
-
-```bash
-bazel run //bench:bench                   # 2000 iterations of 31!
-bazel run //bench:bench -- 100 20         # custom
-```
-
-Results for `2000 31` (bigint):
-
-| Implementation | Time |
-|----------------|------|
-| LLVM backend | 16ms |
-| C++ backend | 18ms |
-| LLVM JIT | 80ms |
-| Koka PEG e2 | 0.96s |
-| C++ interpreter | 0.97s |
-| Koka interpreter | 1.75s |
-| Koka PEG e1 | 1.95s |
-
-The e2 PEG interpreter is ~2× faster than e1 PEG for factorial because e2 has native multiplication while e1 must emulate it with nested loops. The e3 interpreter has similar performance to e2.
-
 ## Code Style
 
 - clang-format with LLVM base, 100 columns, 4-space indent

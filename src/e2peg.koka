@@ -32,10 +32,10 @@ fun e2-action(name: string, txt: string, children: list<e2val>, _caps: captures<
     "Gt" -> e2-binop(children, fn(a, b) if a > b then 1 else 0)
     "Le" -> e2-binop(children, fn(a, b) if a <= b then 1 else 0)
     "Ge" -> e2-binop(children, fn(a, b) if a >= b then 1 else 0)
-    "Arm" -> match children
+    "StmtArm" -> match children
       Cons(SVExpr(cond), Cons(SVStmt(body), _)) -> SVExt(E2Arm(cond, body))
       _ -> SVList(children)
-    "Case" ->
+    "CaseStmt" ->
       val arms = flatten-sv(children).filter(fn(c) match c { SVExt(_) -> True; _ -> False })
       SVStmt(fn(e) exec-case(e, arms))
     _ -> handle-base(name, txt, children).default(SVList(children))

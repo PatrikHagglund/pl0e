@@ -25,7 +25,7 @@ binding     = ident _ ":=" _ expression    // assignment
 
 expression  = sum_expr
 sum_expr    = unary (("+" / "-") _ unary)*
-unary       = "-"? atom
+unary       = "-" _ atom / atom
 atom        = int_lit / ident / "(" _ expression ")" _
 
 int_lit     = digit+ _
@@ -36,7 +36,7 @@ letter      = [a-zA-Z]
 digit       = [0-9]
 
 _           = ([ \t\n\r] / comment)*
-comment     = "//" [^\n]*
+comment     = "//" [^\n]* / "/*" (!"*/" .)* "*/"
 ```
 
 ### Lexical Elements
@@ -46,7 +46,7 @@ comment     = "//" [^\n]*
 - **Keywords**: `loop`, `break_ifz`, `print`
 - **Operators**: `+`, `-`, `:=`, `:`
 - **Delimiters**: `{`, `}`, `(`, `)`, `;` (optional)
-- **Comments**: `//` to end of line
+- **Comments**: `//` to end of line, `/* */` block comments
 
 ## Semantics
 

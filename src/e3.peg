@@ -1,4 +1,4 @@
-// PL/0 Level 3 Grammar
+// PL/0 Level 3 Grammar (PEG variant)
 // Adds: booleans, callables (closures), case expressions, function application
 
 program         = _ statement*

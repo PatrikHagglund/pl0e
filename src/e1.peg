@@ -1,9 +1,12 @@
-// PL/0 Minimal Grammar (PEG variant)
+// PL/0 Level 1 Grammar (PEG variant)
 //
 // Turing-complete via Minsky machine (counter machine) features:
 //   1. Increment/decrement - + and - operations
 //   2. Variables - unbounded integer storage (counters)
 //   3. Conditional control flow - loop + break_ifz (zero-test)
+//
+// Note: Uses right-recursive forms (e.g., `unary "+" _ sum_expr`) for semantic actions.
+// The spec uses simplified iterative forms.
 
 program         = _ statement*
 statement       = binding / loop_stmt / break_stmt / print_stmt / block

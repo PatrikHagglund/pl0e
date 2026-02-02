@@ -88,7 +88,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 | LLVM backend | 16ms |
 | C++ backend | 18ms |
 | LLVM JIT | 80ms |
-| Koka PEG e2 | 0.96s |
+| Koka PEG e2 | 0.18s |
 | C++ interpreter | 0.97s |
 | Koka interpreter | 1.75s |
 | Koka PEG e1 | 1.95s |

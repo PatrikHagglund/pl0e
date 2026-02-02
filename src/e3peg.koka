@@ -129,6 +129,7 @@ fun exec(s: stmt, e: e3env): <div,console,loop-break> e3env
             _ -> exec(SCaseStmt(rest), e)
         Nil -> e
 
+// Local flatten-sv (e3 uses non-generic semval, can't share with pegeval)
 fun flatten-sv(vs: list<semval>): list<semval>
   vs.flatmap(fn(c) match c { SVList(inner) -> inner; _ -> [c] })
 
@@ -140,8 +141,6 @@ fun sv-to-stmt(v: semval): maybe<stmt>
     SVStmt(s) -> Just(s)
     SVExpr(ex) -> Just(SExpr(ex))
     _ -> Nothing
-
-val call-limit = 100000
 
 fun e3-action(name: string, txt: string, children: list<semval>, _caps: captures<semval>): semval
   val cs = flatten-sv(children)
@@ -306,21 +305,15 @@ pub fun main()
     (_, Just((rest, _))) -> input := rest
     _ -> ()
 
-  var iter := 0
   while { !input.is-empty }
-    iter := iter + 1
-    if iter > 10000 then
-      println("ERROR: main loop exceeded 10000 iterations")
-      input := "".slice
-    else
-      trace("parsing at: " ++ input.string.first(30).string ++ "...")
-      match peg-exec-partial(g, [], e3-action, "statement", input)
-        (_, Just((rest, sv))) ->
-          current-env := exec-safe-traced(sv, current-env)
-          match peg-exec-partial(g, [], e3-action, "_", rest)
-            (_, Just((rest2, _))) -> input := rest2
-            _ -> input := rest
-        _ ->
-          if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
-          input := "".slice
+    trace("parsing at: " ++ input.string.first(30).string ++ "...")
+    match peg-exec-partial(g, [], e3-action, "statement", input)
+      (_, Just((rest, sv))) ->
+        current-env := exec-safe-traced(sv, current-env)
+        match peg-exec-partial(g, [], e3-action, "_", rest)
+          (_, Just((rest2, _))) -> input := rest2
+          _ -> input := rest
+      _ ->
+        if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
+        input := "".slice
   println("")

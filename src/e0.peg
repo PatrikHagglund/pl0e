@@ -1,5 +1,6 @@
-// PL/0 Base Grammar - Sequential only (NOT Turing-complete)
+// PL/0 Level 0 Grammar (PEG variant)
 //
+// Sequential only (NOT Turing-complete)
 // Has 2 of 3 Minsky machine features:
 //   1. Increment/decrement - + and - operations
 //   2. Variables - unbounded integer storage (counters)

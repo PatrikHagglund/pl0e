@@ -262,22 +262,25 @@ fun exec-safe(sv: semval, e: e3env): <div,console> e3env
     SVList(Cons(SVStmt(s), _)) -> exec(s, e)
     _ -> e
 
-fun parse-flags(args: list<string>): div (bool, bool, list<string>)
+fun parse-flags(args: list<string>): div (bool, bool, bool, list<string>)
   match args
     Cons("--dump", rest) ->
-      val (_, w, r) = parse-flags(rest)
-      (True, w, r)
+      val (_, w, s, r) = parse-flags(rest)
+      (True, w, s, r)
     Cons("--warn", rest) ->
-      val (d, _, r) = parse-flags(rest)
-      (d, True, r)
+      val (d, _, s, r) = parse-flags(rest)
+      (d, True, s, r)
+    Cons("--stats", rest) ->
+      val (d, w, _, r) = parse-flags(rest)
+      (d, w, True, r)
     Cons(x, rest) ->
-      val (d, w, r) = parse-flags(rest)
-      (d, w, Cons(x, r))
-    Nil -> (False, False, [])
+      val (d, w, s, r) = parse-flags(rest)
+      (d, w, s, Cons(x, r))
+    Nil -> (False, False, False, [])
 
 pub fun main()
   val args = get-args()
-  val (do-dump, do-warn, rest-args) = parse-flags(args)
+  val (do-dump, do-warn, do-stats, rest-args) = parse-flags(args)
 
   val prog-path = match rest-args { Cons(p, _) -> p; Nil -> "examples/example.e3" }
   val arg1-val = match rest-args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
@@ -296,21 +299,28 @@ pub fun main()
   val prog = read-text-file(prog-path.path)
   println("e3: " ++ prog-path ++ " (" ++ prog.count.int/show ++ " chars)")
 
-  var input := prog.slice
-  var current-env: e3env := [("arg1", VInt(arg1-val)), ("arg2", VInt(arg2-val))]
+  if do-stats then
+    val (result, stats) = peg-exec-stats(g, [], e3-action, "program", prog)
+    match result
+      Just(_) -> ()
+      Nothing -> println("Parse failed")
+    println(show-stats(stats))
+  else
+    var input := prog.slice
+    var current-env: e3env := [("arg1", VInt(arg1-val)), ("arg2", VInt(arg2-val))]
 
-  match peg-exec-partial(g, [], e3-action, "_", input)
-    (_, Just((rest, _))) -> input := rest
-    _ -> ()
+    match peg-exec-partial(g, [], e3-action, "_", input)
+      (_, Just((rest, _))) -> input := rest
+      _ -> ()
 
-  while { !input.is-empty }
-    match peg-exec-partial(g, [], e3-action, "statement", input)
-      (_, Just((rest, sv))) ->
-        current-env := exec-safe(sv, current-env)
-        match peg-exec-partial(g, [], e3-action, "_", rest)
-          (_, Just((rest2, _))) -> input := rest2
-          _ -> input := rest
-      _ ->
-        if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
-        input := "".slice
-  println("")
+    while { !input.is-empty }
+      match peg-exec-partial(g, [], e3-action, "statement", input)
+        (_, Just((rest, sv))) ->
+          current-env := exec-safe(sv, current-env)
+          match peg-exec-partial(g, [], e3-action, "_", rest)
+            (_, Just((rest2, _))) -> input := rest2
+            _ -> input := rest
+        _ ->
+          if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
+          input := "".slice
+    println("")

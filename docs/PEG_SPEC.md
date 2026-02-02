@@ -274,10 +274,33 @@ The interpreter binaries support debugging flags:
 ```bash
 e3peg --dump              # Show parsed grammar rules
 e3peg --warn file.e3      # Show static analysis warnings
-e3peg --trace file.e3     # Trace execution
+e3peg --stats file.e3     # Show runtime statistics
+e3peg --warn --stats file.e3  # Both: warnings + runtime data
 ```
 
 The `show-grammar(g)` function returns a string representation of the parsed grammar, useful for verifying multi-line rules are parsed correctly.
+
+### Runtime Statistics
+
+The `--stats` flag collects per-rule metrics during parsing:
+
+```
+Rule                     Calls       Fuel  Backtracks  Success%
+expression               1234      45000          89       93%
+atom                     5678      12000         234       96%
+```
+
+- **Calls**: Number of times the rule was invoked
+- **Fuel**: Total fuel consumed by the rule (correlates with work done)
+- **Backtracks**: Number of times the rule failed after consuming fuel
+- **Success%**: `(Calls - Backtracks) / Calls * 100`
+
+Use `--stats` to:
+1. Identify hot spots (high Calls or Fuel)
+2. Find inefficient rules (low Success%, high Backtracks)
+3. Validate static warnings (do overlapping FIRST sets actually cause backtracks?)
+
+Use `peg-exec-stats(g, acts, def, start, input)` programmatically to get `(result, parse-stats)`.
 
 ### Static Analysis
 

@@ -13,7 +13,6 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Next
 
-- PEG runtime monitoring: per-rule fuel stats, backtrack-to-success ratio
 - Create proper `rules_koka` for Bazel (library rule, dependency tracking, toolchain abstraction)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Explore efficient interpreters (Graal/Truffle, simple JIT)
@@ -27,6 +26,10 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- PEG dynamic analysis: runtime statistics (`--stats` flag)
+  - Per-rule call count, fuel consumption, backtrack count
+  - Success% metric to identify inefficient rules
+  - Complements static `--warn` analysis with empirical data
 - PEG static analysis: warn about potential backtracking issues (`--warn` flag)
   - FIRST set computation using fixed-point iteration
   - Detect overlapping FIRST sets in choice alternatives

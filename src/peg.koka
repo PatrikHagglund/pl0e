@@ -526,8 +526,36 @@ effect peg-fail
 // Fuel effect for preventing infinite loops
 effect peg-fuel
   fun burn(): bool  // Consume one unit of fuel, returns false if exhausted
+  fun enter-rule(name: string): int  // Returns current fuel for delta calculation
+  fun exit-rule(name: string, success: bool, fuel-start: int): ()
 
 pub val default-fuel = 50000000  // Default fuel limit (50M)
+
+// === Runtime Statistics ===
+pub struct rule-stats
+  calls: int
+  fuel: int
+  backtracks: int
+
+pub alias parse-stats = list<(string, rule-stats)>
+
+pub fun show-stats(stats: parse-stats): div string
+  val sorted = stats.filter(fn(s) s.snd.calls > 0)
+  if sorted.is-nil then "No rule calls recorded.\n"
+  else
+    val header = "Rule                     Calls       Fuel  Backtracks  Success%\n"
+    val lines = sorted.map fn((name, st))
+      val success-pct = if st.calls == 0 then 100 else ((st.calls - st.backtracks) * 100) / st.calls
+      name.pad-right(20) ++ st.calls.show.pad-left(10) ++ st.fuel.show.pad-left(11) ++ 
+        st.backtracks.show.pad-left(12) ++ (success-pct.show ++ "%").pad-left(10)
+    header ++ lines.join("\n") ++ "\n"
+
+fun stats-update(stats: parse-stats, name: string, fuel-delta: int, backtrack: bool): parse-stats
+  match stats
+    Nil -> [(name, Rule-stats(1, fuel-delta, if backtrack then 1 else 0))]
+    Cons((n, st), rest) | n == name ->
+      Cons((n, Rule-stats(st.calls + 1, st.fuel + fuel-delta, st.backtracks + (if backtrack then 1 else 0))), rest)
+    Cons(x, rest) -> Cons(x, stats-update(rest, name, fuel-delta, backtrack))
 
 // === Memoization for Packrat Parsing ===
 // Key: (rule_name, position), Value: parse result or failure
@@ -938,13 +966,19 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
 
     PRule(name) ->
       val (body, tag) = grammar-lookup(g, name)
-      val (s1, v1) = peg-exec-match(g, acts, def, body, s)
-      val txt = s.string.first(s.count - s1.count).string
-      val action-name = tag.default(name)
-      val act = action-lookup(acts, action-name, def)
-      // Pass captures from the body match
-      val caps = match v1 { Captured(_, _) -> [] }  // captures already processed in seq
-      (s1, Captured(Nothing, act(action-name, txt, [v1.cval], caps)))
+      val fuel-start = enter-rule(name)
+      val result = peg-exec-try(g, acts, def, body, s)
+      match result
+        Nothing ->
+          exit-rule(name, False, fuel-start)
+          fail()
+        Just((s1, v1)) ->
+          exit-rule(name, True, fuel-start)
+          val txt = s.string.first(s.count - s1.count).string
+          val action-name = tag.default(name)
+          val act = action-lookup(acts, action-name, def)
+          val caps = match v1 { Captured(_, _) -> [] }
+          (s1, Captured(Nothing, act(action-name, txt, [v1.cval], caps)))
 
     PCapture(cname, p1) ->
       val (s1, v1) = peg-exec-match(g, acts, def, p1, s)
@@ -1037,14 +1071,35 @@ fun peg-exec-choice(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>,
 
 fun with-fuel(max-fuel: int, action: () -> <peg-fuel|e> a): e a
   var fuel := max-fuel
-  with fun burn()
-    if fuel <= 0 then False
-    else { fuel := fuel - 1; True }
+  with handler
+    fun burn()
+      if fuel <= 0 then False
+      else { fuel := fuel - 1; True }
+    fun enter-rule(_name) fuel
+    fun exit-rule(_name, _success, _fuel-start) ()
   action()
+
+fun with-fuel-stats(max-fuel: int, action: () -> <peg-fuel|e> a): e (a, parse-stats)
+  var fuel := max-fuel
+  var stats : parse-stats := []
+  with handler
+    fun burn()
+      if fuel <= 0 then False
+      else { fuel := fuel - 1; True }
+    fun enter-rule(_name) fuel
+    fun exit-rule(name, success, fuel-start)
+      stats := stats-update(stats, name, fuel-start - fuel, !success)
+  (action(), stats)
 
 // Public API for semantic action execution
 pub fun peg-exec(g: grammar, acts: actions<s>, def: action<s>, start: string, input: string, max-fuel: int = default-fuel): <div> maybe<s>
   with-fuel(max-fuel) fn()
+    match peg-exec-try(g, acts, def, PRule(start), input.slice)
+      Just((_, v)) -> Just(v.cval)
+      Nothing -> Nothing
+
+pub fun peg-exec-stats(g: grammar, acts: actions<s>, def: action<s>, start: string, input: string, max-fuel: int = default-fuel): <div> (maybe<s>, parse-stats)
+  with-fuel-stats(max-fuel) fn()
     match peg-exec-try(g, acts, def, PRule(start), input.slice)
       Just((_, v)) -> Just(v.cval)
       Nothing -> Nothing

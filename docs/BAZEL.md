@@ -28,9 +28,11 @@ Used for all C/C++ compilation:
 Used for extra LLVM tools not in the minimal distribution:
 - `lli` — LLVM interpreter for JIT execution
 - `llvm-link` — LLVM bitcode linker
-- `libclang_rt.builtins.a` — compiler-rt builtins (for 128-bit math)
 
 Access via: `@llvm_tools_llvm//:bin/lli`, etc.
+
+Note: `libclang_rt.builtins.a` (for 128-bit math) is available in both toolchains.
+The benchmarks use the copy from `toolchains_llvm` since `lli` needs it as an explicit file path.
 
 ### Hermetic Koka Toolchain
 
@@ -63,4 +65,3 @@ Currently supported: Linux x86_64
 
 Platform-specific components:
 - `koka.bzl`: Only linux-x64 Koka binary configured
-- `src/BUILD.bazel`: x86_64-specific libc++ header path for LLVM IR generation

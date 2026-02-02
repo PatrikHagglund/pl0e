@@ -36,13 +36,11 @@ def e1_llvm_binary(name, src):
         srcs = [name + ".ll", "//src:e1_rt_bigint_ll"],
         outs = [name + "_bin"],
         cmd = """
-            CLANG=$(execpath @llvm_tools_llvm//:bin/clang)
-            LLVM_ROOT=$$(dirname $$(dirname $$CLANG))
             CRT_DIR=$(execpath @toolchains_llvm_bootstrapped//runtimes:crt_objects_directory_linux)
             GLIBC_LIB=$(execpath @toolchains_llvm_bootstrapped//runtimes/glibc:glibc_library_search_directory)
             RESOURCE_DIR=$(execpath @toolchains_llvm_bootstrapped//runtimes:resource_directory)
             $(execpath @llvm_tools_llvm//:bin/llvm-link) -S $(SRCS) -o $@.linked.ll
-            $$CLANG -Wno-override-module -O3 -march=native \
+            $(execpath @toolchains_llvm_bootstrapped//tools:clang) -Wno-override-module -O3 -march=native \
                 -target x86_64-linux-gnu \
                 --sysroot=/dev/null \
                 -fuse-ld=lld \
@@ -56,7 +54,7 @@ def e1_llvm_binary(name, src):
         """,
         tools = [
             "@llvm_tools_llvm//:bin/llvm-link",
-            "@llvm_tools_llvm//:bin/clang",
+            "@toolchains_llvm_bootstrapped//tools:clang",
             "@toolchains_llvm_bootstrapped//runtimes:crt_objects_directory_linux",
             "@toolchains_llvm_bootstrapped//runtimes/glibc:glibc_library_search_directory",
             "@toolchains_llvm_bootstrapped//runtimes:resource_directory",

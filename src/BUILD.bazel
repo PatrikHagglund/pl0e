@@ -130,26 +130,28 @@ cc_library(
 exports_files(["e1.hpp", "e1_bigint.hpp", "e1_preamble.hpp"])
 
 # Compile bigint runtime to LLVM IR
-# Uses toolchains_llvm clang with libc++ headers from the same distribution
+# Uses toolchains_llvm_bootstrapped clang with libc++ headers from the same toolchain
 genrule(
     name = "e1_rt_bigint_ll",
     srcs = ["e1_rt_bigint.cpp", "e1_bigint.hpp"],
     outs = ["e1_rt_bigint.ll"],
     cmd = """
-        CLANG=$(execpath @llvm_tools_llvm//:bin/clang)
-        LLVM_ROOT=$$(dirname $$(dirname $$CLANG))
+        LIBCXX_HDR=$(execpath @@toolchains_llvm_bootstrapped++http_archive+libcxx//:libcxx_headers_include_search_directory)
+        LIBCXXABI_HDR=$(execpath @@toolchains_llvm_bootstrapped++http_archive+libcxxabi//:libcxxabi_headers_include_search_directory)
         GLIBC_HDR=$(execpath @toolchains_llvm_bootstrapped//runtimes/glibc:glibc_headers_include_search_directory)
         KERNEL_HDR=$(execpath @@toolchains_llvm_bootstrapped++kernel_headers+kernel_headers//:kernel_headers_directory)
-        $$CLANG -x c++ -std=c++26 \
-            -isystem $$LLVM_ROOT/include/c++/v1 \
-            -isystem $$LLVM_ROOT/include/x86_64-unknown-linux-gnu/c++/v1 \
+        $(execpath @toolchains_llvm_bootstrapped//tools:clang) -x c++ -std=c++26 \
+            -isystem $$LIBCXX_HDR \
+            -isystem $$LIBCXXABI_HDR \
             -isystem $$GLIBC_HDR \
             -isystem $$KERNEL_HDR \
             -Wno-vla-cxx-extension -S -emit-llvm -O3 \
             $(location e1_rt_bigint.cpp) -o $@
     """,
     tools = [
-        "@llvm_tools_llvm//:bin/clang",
+        "@toolchains_llvm_bootstrapped//tools:clang",
+        "@@toolchains_llvm_bootstrapped++http_archive+libcxx//:libcxx_headers_include_search_directory",
+        "@@toolchains_llvm_bootstrapped++http_archive+libcxxabi//:libcxxabi_headers_include_search_directory",
         "@toolchains_llvm_bootstrapped//runtimes/glibc:glibc_headers_include_search_directory",
         "@@toolchains_llvm_bootstrapped++kernel_headers+kernel_headers//:kernel_headers_directory",
     ],

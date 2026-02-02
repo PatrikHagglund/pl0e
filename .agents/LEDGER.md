@@ -38,7 +38,11 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
   4. Nullable loop detection (`e*`/`e+` where `e` can match empty)
 - ~~Fix underlying e3 grammar issue with `func_lit` + parenthesized expressions~~ ✓ Done
 - Future PEG improvements:
-  - Memoization for semantic actions (packrat parsing) - would fix exponential backtracking
+  - ~~Memoization for semantic actions (packrat parsing)~~ ✓ Done (but doesn't fix lookahead backtracking)
+  - Fix e3 grammar exponential backtracking on `((x) -> x) (1)` patterns
+    - Issue: lookahead in `expression` rule causes exponential backtracking
+    - Memoization doesn't help because backtracking happens inside lookahead, not at rule boundaries
+    - Options: refactor grammar, memoize inside lookahead patterns, or different closure parsing strategy
   - Factor out common prefixes in grammar (e.g., cmp_expr alternatives)
   - Ambiguity detection
   - Fuel usage statistics
@@ -55,7 +59,6 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
   - Pros: clear ownership, easier to add levels, level-specific docs with code
   - Cons: more directories, Makefile complexity
   - Consider hybrid: keep src/ flat, split examples by level
-- Add memoization to PEG semantic-action mode (thread memo table through peg-exec-match)
 - Support for "syntactic sugar"?
 - Explore papers about efficient interpreters.
   - Test Graal/Truffle
@@ -71,40 +74,14 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 
 ### Working set (current focus only; replace/prune as "Now" changes)
 
-**Debug e3 infinite loop issue** (IN PROGRESS)
-- [x] Add trace option to PEG interpreter/action runner
-  - Added `--trace` CLI flag to e3peg.koka
-  - Traces rule entry/exit, parse position
-- [x] Fix infinite loop bugs in peg.koka
-  - Fixed PStar/PPlus calling peg-exec-try twice per iteration
-  - Fixed memoized PStar not handling Nothing case
-- [x] Add e3 test suite (12/13 passing)
-  - Tests: factorial, gcd, collatz, basic_arith, comparison, booleans, case expr/stmt, loop, closure
-  - Failing: closure_curry (nested closures like `() -> (1)` hang)
-- [ ] Investigate remaining hang with nested closures
-  - Issue: `f := () -> (1)` hangs, but `f := () -> 1` works
-  - Appears related to `func_lit` trying to match parenthesized expressions
-  - Need deeper investigation of PEG backtracking behavior
-
-**Debugging artifacts:**
-- `src/minimal.peg` — Minimal grammar that does NOT reproduce the bug (works correctly)
-- `src/e3_nofunc.peg` — e3 grammar without `func_lit` (used to isolate the issue)
-
-**Findings from minimal grammar testing:**
-1. `src/minimal.peg` with similar structure works — suggests issue is in e3-specific grammar interaction
-2. Removing `func_lit` from `atom` in e3.peg makes `() -> (1)` not hang (but fails to parse)
-3. The hang occurs during parsing, not execution (no trace output before hang)
-4. Pattern: any closure with parentheses in body hangs: `() -> (1)`, `(x) -> x`, `() -> () -> 1`
-5. Closures without parens in body work: `() -> 1`, `(x) -> 1`, `(a,b) -> 1`
-6. Standalone parenthesized expressions work: `f := (1)` parses fine
-7. The issue is specific to `func_lit` + parenthesized `expression` as body
-
-**Hypothesis:** When parsing `() -> (1)`, the body `(1)` triggers `func_lit` to try matching
-`(1)` as another closure. `func_lit` fails (no `->`), but something in the backtracking
-or action execution is causing an infinite loop. The minimal grammar doesn't have this
-interaction pattern.
+(No active task)
 
 ## Done (prune when exceeding 30 items)
+- Added memoization for PEG semantic-action mode (`peg-exec-memo`, `peg-exec-partial-memo`)
+  - Caches at rule boundaries (packrat-style)
+  - Threads memo table functionally through execution
+  - Updated docs/PEG_SPEC.md with API documentation
+  - Note: doesn't fix `factorial_y.e3` — exponential backtracking happens inside lookahead patterns, not at rule boundaries
 - Fixed Bazel build for C++ targets:
   - Installed system dependencies: glibc-devel, libstdc++-devel, gcc, g++
   - Configured `e1_rt_bigint_ll` genrule with `local = True` to access system headers

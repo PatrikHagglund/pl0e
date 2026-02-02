@@ -303,8 +303,8 @@ pub fun main()
   var current-env: e3env := [("arg1", VInt(arg1-val)), ("arg2", VInt(arg2-val))]
 
   match peg-exec-partial(g, [], e3-action, "_", input)
-    Just((rest, _)) -> input := rest
-    Nothing -> ()
+    (_, Just((rest, _))) -> input := rest
+    _ -> ()
 
   var iter := 0
   while { !input.is-empty }
@@ -315,12 +315,12 @@ pub fun main()
     else
       trace("parsing at: " ++ input.string.first(30).string ++ "...")
       match peg-exec-partial(g, [], e3-action, "statement", input)
-        Just((rest, sv)) ->
+        (_, Just((rest, sv))) ->
           current-env := exec-safe-traced(sv, current-env)
           match peg-exec-partial(g, [], e3-action, "_", rest)
-            Just((rest2, _)) -> input := rest2
-            Nothing -> input := rest
-        Nothing ->
+            (_, Just((rest2, _))) -> input := rest2
+            _ -> input := rest
+        _ ->
           if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
           input := "".slice
   println("")

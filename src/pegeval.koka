@@ -138,17 +138,17 @@ pub fun run-interpreter(
   var current-env: penv := [("arg1", arg1-val), ("arg2", arg2-val)]
 
   match peg-exec-partial(g, [], make-action, "_", input)
-    Just((rest, _)) -> input := rest
-    Nothing -> ()
+    (_, Just((rest, _))) -> input := rest
+    _ -> ()
 
   while { !input.is-empty }
     match peg-exec-partial(g, [], make-action, "statement", input)
-      Just((rest, sv)) ->
+      (_, Just((rest, sv))) ->
         current-env := exec-safe(sv, current-env, exec-ext, break-msg)
         match peg-exec-partial(g, [], make-action, "_", rest)
-          Just((rest2, _)) -> input := rest2
-          Nothing -> input := rest
-      Nothing ->
+          (_, Just((rest2, _))) -> input := rest2
+          _ -> input := rest
+      _ ->
         if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
         input := "".slice
   println("")

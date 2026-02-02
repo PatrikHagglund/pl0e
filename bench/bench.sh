@@ -8,17 +8,19 @@ FACTORIAL_E1="$4"
 E1PEG="$5"
 E2PEG="$6"
 FACTORIAL_E2="$7"
-E1_KOKA="$8"
-FACTORIAL_LL="$9"
-RUNTIME_LL="${10}"
-LLI="${11}"
-LLVM_LINK="${12}"
-BUILTINS="${13}"
+E3PEG="$8"
+FACTORIAL_E3="$9"
+E1_KOKA="${10}"
+FACTORIAL_LL="${11}"
+RUNTIME_LL="${12}"
+LLI="${13}"
+LLVM_LINK="${14}"
+BUILTINS="${15}"
 
 # Default iterations and n
 ITERS=2000
 N=31
-shift 13 2>/dev/null || true
+shift 15 2>/dev/null || true
 if [ "$1" = "--" ]; then
     shift
     ITERS=${1:-2000}
@@ -70,5 +72,11 @@ fi
 if [ -n "$E2PEG" ] && [ -x "$E2PEG" ]; then
     echo "=== Koka PEG e2 ==="
     time "$E2PEG" "$FACTORIAL_E2" "$ITERS" "$N"
+    echo ""
+fi
+
+if [ -n "$E3PEG" ] && [ -x "$E3PEG" ]; then
+    echo "=== Koka PEG e3 ==="
+    time "$E3PEG" "$FACTORIAL_E3" "$ITERS" "$N"
     echo ""
 fi

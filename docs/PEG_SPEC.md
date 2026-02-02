@@ -146,7 +146,7 @@ alias action<s>    // (name, text, children, captures) -> s
 parse-peg(input: string): grammar
 peg-parse(g, start, input): maybe<ptree>
 peg-exec(g, acts, def, start, input): maybe<s>
-peg-exec-partial(g, acts, def, start, input): maybe<(sslice, s)>
+peg-exec-partial(g, acts, def, start, input, memo?, orig?): (maybe<memo>, maybe<(sslice, s)>)
 capture-get(caps, name): maybe<s>
 ```
 
@@ -166,10 +166,30 @@ loop_stmt  = "loop" _ body:statement { Loop($body) }
 
 - Backtracking via Koka's `peg-fail` effect
 - No left-recursion support (detected at load time with error)
-- Memoization available via `*-memo` functions (parse-tree mode only, not semantic actions)
+- Memoization available via `*-memo` functions for both parse-tree and semantic-action modes
 - Inline actions evaluated during `peg-exec*` calls
 - Named captures collected from sequences for inline actions
 - Single-element sequences pass through without wrapping (optimization)
+
+### Memoization
+
+Packrat-style memoization caches results at rule boundaries (`PRule`) to avoid exponential backtracking. Memoization is opt-in via the `memo` parameter:
+
+```koka
+// Without memoization (default)
+match peg-exec-partial(g, [], action, "rule", input)
+  (_, Just((rest, value))) -> ...
+  _ -> ...
+
+// With memoization - pass Just([]) initially, thread memo through calls
+var memo := Just([])
+match peg-exec-partial(g, [], action, "rule", input, memo=memo, orig=input)
+  (m, Just((rest, value))) -> { memo := m; ... }
+  (m, _) -> { memo := m; ... }
+```
+
+**Limitation:** Memoization only caches at rule boundaries. Exponential backtracking inside lookahead patterns (`&e` / `!e`) or complex inline sequences is not memoized. For example, a grammar with `&("(" ... ")" "->") func_lit` may still exhibit exponential behavior on deeply nested input.
+```
 
 ### Grammar Validation
 
@@ -219,9 +239,10 @@ The `(statement ";"? _)` sequence produces an `SVList` per iteration. The Block 
 The semantic-action interpreter (`peg-exec*`) is ~14% slower than a two-phase parse-then-execute approach. This overhead comes from:
 - Creating closures/thunks during parsing
 - Nested list wrapping from sequences
-- No memoization (memoization is only implemented for parse-tree mode)
 
 For compute-bound programs, this overhead is negligible since parsing happens once at startup.
+
+**Memoization overhead:** The `*-memo` functions add overhead for cache management (O(n) list lookup per rule). For simple grammars without backtracking, memoization can be 1.5-3x slower than non-memoized parsing. Use memoization only when the grammar has significant backtracking or overlapping alternatives.
 
 ## Future Considerations
 

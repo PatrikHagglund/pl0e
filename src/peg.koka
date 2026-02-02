@@ -263,7 +263,61 @@ fun validate-grammar(g: grammar): <div,exn> grammar
   val left-rec = g.filter-map(fn(r) if is-left-recursive(g, r.fst, r.snd) then Just(r.fst) else Nothing)
   if !left-rec.is-empty then
     throw("Left-recursive rules (will cause infinite loop): " ++ left-rec.join(", "))
+  // Check for nullable loops (e* or e+ where e can match empty)
+  val nulls = compute-nullable(g)
+  val nullable-loops = g.flatmap(fn(r) find-nullable-loops(nulls, r.fst, r.snd))
+  if !nullable-loops.is-empty then
+    throw("Nullable loops (e*/e+ where e can match empty): " ++ nullable-loops.join(", "))
   g
+
+// Nullable set: rules that can match empty string
+pub alias nullable-set = list<string>
+
+// Compute nullable set using fixed-point iteration
+fun compute-nullable(g: grammar): div nullable-set
+  fun iterate(nulls: nullable-set): div nullable-set
+    val new-nulls = g.filter-map fn(r)
+      if nulls.any(fn(n) n == r.fst) then Nothing  // Already known nullable
+      elif is-nullable-with(nulls, r.snd) then Just(r.fst)
+      else Nothing
+    if new-nulls.is-empty then nulls
+    else iterate(nulls ++ new-nulls)
+  iterate([])
+
+// Check if pattern is nullable given current nullable set (no recursion into rules)
+fun is-nullable-with(nulls: nullable-set, p: peg): div bool
+  match p
+    PLit(s) -> s == ""
+    PAny -> False
+    PClass(_, _) -> False
+    PSeq(ps) -> ps.all(fn(p1) is-nullable-with(nulls, p1))
+    PChoice(ps) -> ps.any(fn(p1) is-nullable-with(nulls, p1))
+    PStar(_) -> True
+    PPlus(p1) -> is-nullable-with(nulls, p1)
+    POpt(_) -> True
+    PNot(_) -> True
+    PAnd(_) -> True
+    PRule(n) -> nulls.any(fn(x) x == n)
+    PCapture(_, p1) -> is-nullable-with(nulls, p1)
+    PAction(p1, _) -> is-nullable-with(nulls, p1)
+
+// Find nullable loops in a pattern using pre-computed nullable set
+fun find-nullable-loops(nulls: nullable-set, rule-name: string, p: peg): div list<string>
+  match p
+    PStar(p1) ->
+      val inner = find-nullable-loops(nulls, rule-name, p1)
+      if is-nullable-with(nulls, p1) then Cons(rule-name ++ ": e* where e is nullable", inner) else inner
+    PPlus(p1) ->
+      val inner = find-nullable-loops(nulls, rule-name, p1)
+      if is-nullable-with(nulls, p1) then Cons(rule-name ++ ": e+ where e is nullable", inner) else inner
+    PSeq(ps) -> ps.flatmap(fn(p1) find-nullable-loops(nulls, rule-name, p1))
+    PChoice(ps) -> ps.flatmap(fn(p1) find-nullable-loops(nulls, rule-name, p1))
+    POpt(p1) -> find-nullable-loops(nulls, rule-name, p1)
+    PNot(p1) -> find-nullable-loops(nulls, rule-name, p1)
+    PAnd(p1) -> find-nullable-loops(nulls, rule-name, p1)
+    PCapture(_, p1) -> find-nullable-loops(nulls, rule-name, p1)
+    PAction(p1, _) -> find-nullable-loops(nulls, rule-name, p1)
+    _ -> []
 
 // Check if a rule is directly left-recursive (rule appears as first element)
 fun is-left-recursive(g: grammar, name: string, p: peg): div bool

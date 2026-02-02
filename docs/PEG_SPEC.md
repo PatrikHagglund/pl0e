@@ -196,6 +196,7 @@ match peg-exec-partial(g, [], action, "rule", input, memo=memo, orig=input)
 At load time, `parse-peg` validates the grammar:
 - Undefined rule references (catches truncated multi-line rules)
 - Left recursion (direct or indirect) - throws error with rule names
+- Nullable loops (`e*` or `e+` where `e` can match empty string) - would cause infinite loops at runtime
 
 ### Fuel Limit
 

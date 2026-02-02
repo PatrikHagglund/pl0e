@@ -141,6 +141,8 @@ fun sv-to-stmt(v: semval): maybe<stmt>
     SVExpr(ex) -> Just(SExpr(ex))
     _ -> Nothing
 
+val call-limit = 100000
+
 fun e3-action(name: string, txt: string, children: list<semval>, _caps: captures<semval>): semval
   val cs = flatten-sv(children)
   if name == "_text" then SVIdent(txt)
@@ -230,15 +232,72 @@ fun exec-safe(sv: semval, e: e3env): <div,console> e3env
     SVList(Cons(SVStmt(s), _)) -> exec(s, e)
     _ -> e
 
+fun show-rval(v: rval): string
+  match v
+    VInt(n) -> n.show
+    VBool(b) -> if b then "true" else "false"
+    VClosure(_, _, _) -> "<closure>"
+
+fun show-expr(ex: expr): string
+  match ex
+    EVal(v) -> v.show-rval
+    EVar(s) -> s
+    EBinop(op, _, _) -> "Binop(" ++ op ++ ")"
+    ENot(_) -> "Not(...)"
+    ENeg(_) -> "Neg(...)"
+    EApply(_, _) -> "Apply(...)"
+    ECase(_) -> "Case(...)"
+    EFunc(ps, _) -> "Func(" ++ ps.join(",") ++ ")"
+
+fun show-stmt(s: stmt): string
+  match s
+    SExpr(_) -> "Expr(...)"
+    SAssign(id, _) -> "Assign(" ++ id ++ ")"
+    SDecl(id) -> "Decl(" ++ id ++ ")"
+    SPrint(_) -> "Print(...)"
+    SLoop(_) -> "Loop(...)"
+    SBreak -> "Break"
+    SBlock(ss) -> "Block(" ++ ss.length.show ++ " stmts)"
+    SCaseStmt(_) -> "CaseStmt(...)"
+
 pub fun main()
   val args = get-args()
-  val prog-path = match args { Cons(p, _) -> p; Nil -> "examples/example.e3" }
-  val arg1-val = match args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
-  val arg2-val = match args { Cons(_, Cons(_, Cons(n, _))) -> n.parse-int.default(0); _ -> 0 }
+  val (do-trace, rest-args1) = match args
+    Cons("--trace", rest) -> (True, rest)
+    _ -> (False, args)
 
+  val (do-dump, rest-args) = match rest-args1
+    Cons("--dump", rest) -> (True, rest)
+    _ -> (False, rest-args1)
+
+  fun trace(msg: string): console ()
+    if do-trace then println("[trace] " ++ msg)
+
+  val prog-path = match rest-args { Cons(p, _) -> p; Nil -> "examples/example.e3" }
+  val arg1-val = match rest-args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
+  val arg2-val = match rest-args { Cons(_, Cons(_, Cons(n, _))) -> n.parse-int.default(0); _ -> 0 }
+
+  println("loading grammar...")
   val g = parse-peg(read-text-file("src/e3.peg".path))
+  if do-dump then
+    println("loaded " ++ g.length.show ++ " rules")
+    println(show-grammar(g))
+    return ()
   val prog = read-text-file(prog-path.path)
   println("e3: " ++ prog-path ++ " (" ++ prog.count.int/show ++ " chars)")
+
+  fun exec-traced(st: stmt, env: e3env): <div,console,loop-break> e3env
+    trace("exec: " ++ st.show-stmt)
+    exec(st, env)
+
+  fun exec-safe-traced(sv: semval, env: e3env): <div,console> e3env
+    with ctl do-break(e1)
+      println("Error: 'break' used outside of loop")
+      e1
+    match sv
+      SVStmt(st) -> exec-traced(st, env)
+      SVList(Cons(SVStmt(st), _)) -> exec-traced(st, env)
+      _ -> env
 
   var input := prog.slice
   var current-env: e3env := [("arg1", VInt(arg1-val)), ("arg2", VInt(arg2-val))]
@@ -247,14 +306,21 @@ pub fun main()
     Just((rest, _)) -> input := rest
     Nothing -> ()
 
+  var iter := 0
   while { !input.is-empty }
-    match peg-exec-partial(g, [], e3-action, "statement", input)
-      Just((rest, sv)) ->
-        current-env := exec-safe(sv, current-env)
-        match peg-exec-partial(g, [], e3-action, "_", rest)
-          Just((rest2, _)) -> input := rest2
-          Nothing -> input := rest
-      Nothing ->
-        if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
-        input := "".slice
+    iter := iter + 1
+    if iter > 10000 then
+      println("ERROR: main loop exceeded 10000 iterations")
+      input := "".slice
+    else
+      trace("parsing at: " ++ input.string.first(30).string ++ "...")
+      match peg-exec-partial(g, [], e3-action, "statement", input)
+        Just((rest, sv)) ->
+          current-env := exec-safe-traced(sv, current-env)
+          match peg-exec-partial(g, [], e3-action, "_", rest)
+            Just((rest2, _)) -> input := rest2
+            Nothing -> input := rest
+        Nothing ->
+          if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
+          input := "".slice
   println("")

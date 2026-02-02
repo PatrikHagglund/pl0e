@@ -1,0 +1,26 @@
+// Minimal grammar to reproduce the e3 infinite loop issue
+// RESULT: This grammar does NOT reproduce the bug - it works correctly
+// Used to isolate the issue to e3-specific grammar interactions
+// See .agents/LEDGER.md for debugging notes
+start = _ statement*
+statement = binding / print_stmt
+binding = id:ident _ ":=" _ e:expr { Assign($id, $e) }
+print_stmt = "print" _ e:expr { Print($e) }
+
+expr = apply
+apply = atom (__ atom)* _
+atom = int_lit / func / paren / id:ident { Var($id) }
+
+int_lit = digit+ { Int($0) }
+func = "(" _ p:params? ")" _ "->" _ body:expr { Func($p, $body) }
+params = ident _ ("," _ ident _)* { Params }
+paren = "(" _ e:expr ")" { $e }
+
+ident = !keyword letter idchar* { Ident($0) }
+keyword = "print" !idchar
+idchar = [a-zA-Z0-9_]
+letter = [a-zA-Z]
+digit = [0-9]
+
+_ = [ \t\n\r]*
+__ = [ \t]+

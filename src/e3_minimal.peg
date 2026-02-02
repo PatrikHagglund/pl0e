@@ -1,0 +1,25 @@
+// Minimal test grammar
+program         = _ statement*
+statement       = binding / print_stmt
+
+binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
+print_stmt      = "print" _ e:expression { Print($e) }
+
+expression      = apply_expr
+apply_expr      = atom (__ atom)* _
+atom            = int_lit / func_lit
+                / id:ident { Var($id) }
+                / "(" _ e:expression ")" { $e }
+
+int_lit         = digit+ { Int($0) }
+func_lit        = "(" _ p:params? ")" _ "->" _ body:expression { Func($p, $body) }
+params          = ident _ ("," _ ident _)* ","? _ { Params }
+
+ident           = letter idchar* { Ident($0) }
+idchar          = [a-zA-Z0-9_]
+letter          = [a-zA-Z]
+digit           = [0-9]
+
+_               = ([ \t\n\r] / comment)*
+__              = [ \t]+
+comment         = "//" [^\n]*

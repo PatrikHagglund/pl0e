@@ -32,3 +32,18 @@ sh_test(
     data = [":peg_test_bin"],
     timeout = "short",
 )
+
+sh_test(
+    name = "e3_test",
+    srcs = ["e3_test.sh"],
+    args = [
+        "$(location //src:e3peg)",
+        "examples",
+    ],
+    data = [
+        "//src:e3peg",
+        "//src:e3.peg",
+        "//examples:e3_examples",
+    ],
+    timeout = "short",
+)

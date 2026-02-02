@@ -1,5 +1,10 @@
 // Factorial using Y combinator (workaround for no recursive closures)
 // Usage: ./src/e3peg examples/factorial_y.e3 <iterations> <n>
+//
+// NOTE: This example currently exceeds the PEG parser's fuel limit due to
+// deeply nested parenthesized closures. The grammar causes exponential
+// backtracking on patterns like ((x) -> ((y) -> ...)). A workaround is to
+// split the Y combinator into separate bindings (see factorial_y_split.e3).
 
 // Y combinator: enables recursion without self-reference
 Y := (f) -> ((x) -> f ((y) -> x x y)) ((x) -> f ((y) -> x x y))

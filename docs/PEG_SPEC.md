@@ -165,11 +165,45 @@ loop_stmt  = "loop" _ body:statement { Loop($body) }
 ## Implementation Notes
 
 - Backtracking via Koka's `peg-fail` effect
-- No left-recursion support (will loop infinitely)
+- No left-recursion support (detected at load time with error)
 - Memoization available via `*-memo` functions (parse-tree mode only, not semantic actions)
 - Inline actions evaluated during `peg-exec*` calls
 - Named captures collected from sequences for inline actions
 - Single-element sequences pass through without wrapping (optimization)
+
+### Grammar Validation
+
+At load time, `parse-peg` validates the grammar:
+- Undefined rule references (catches truncated multi-line rules)
+- Left recursion (direct or indirect) - throws error with rule names
+
+### Fuel Limit
+
+The semantic-action interpreter has a fuel counter to prevent infinite loops from problematic grammars. Each call to `peg-exec-match` consumes one unit of fuel. When fuel is exhausted, parsing fails gracefully instead of hanging.
+
+```koka
+// Default: 1,000,000 operations
+peg-exec(g, acts, def, start, input)
+
+// Custom limit
+peg-exec(g, acts, def, start, input, max-fuel=500000)
+```
+
+This protects against:
+- Grammars with unintended left recursion
+- Pathological backtracking patterns
+- Bugs in repetition operators
+
+### Debugging
+
+The interpreter binaries support debugging flags:
+
+```bash
+e3peg --dump              # Show parsed grammar rules
+e3peg --trace file.e3     # Trace execution
+```
+
+The `show-grammar(g)` function returns a string representation of the parsed grammar, useful for verifying multi-line rules are parsed correctly.
 
 ### Nested List Handling
 

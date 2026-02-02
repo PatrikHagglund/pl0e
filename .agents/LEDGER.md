@@ -31,6 +31,17 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 - Other levels (e2 through e6) have PEG grammars and examples but no interpreters
 
 ## Next
+- Harden PEG interpreter against infinite loops:
+  1. ~~Progress check in all `PStar`/`PPlus` variants~~ ✓ Done
+  2. ~~Add fuel counter to `peg-exec-match` that fails after N operations~~ ✓ Done
+  3. ~~Left recursion detection~~ ✓ Done
+  4. Nullable loop detection (`e*`/`e+` where `e` can match empty)
+- ~~Fix underlying e3 grammar issue with `func_lit` + parenthesized expressions~~ ✓ Done
+- Future PEG improvements:
+  - Memoization for semantic actions (packrat parsing) - would fix exponential backtracking
+  - Factor out common prefixes in grammar (e.g., cmp_expr alternatives)
+  - Ambiguity detection
+  - Fuel usage statistics
 - Create proper `rules_koka` for Bazel
   - Add `koka_library` rule (compile to `.kki` interface files)
   - Proper dependency tracking (per-file actions instead of rebuilding all together)
@@ -59,7 +70,39 @@ Explore the design and implementation of simple languages. Inspired by PL/0.
 ## Now
 
 ### Working set (current focus only; replace/prune as "Now" changes)
-(empty)
+
+**Debug e3 infinite loop issue** (IN PROGRESS)
+- [x] Add trace option to PEG interpreter/action runner
+  - Added `--trace` CLI flag to e3peg.koka
+  - Traces rule entry/exit, parse position
+- [x] Fix infinite loop bugs in peg.koka
+  - Fixed PStar/PPlus calling peg-exec-try twice per iteration
+  - Fixed memoized PStar not handling Nothing case
+- [x] Add e3 test suite (12/13 passing)
+  - Tests: factorial, gcd, collatz, basic_arith, comparison, booleans, case expr/stmt, loop, closure
+  - Failing: closure_curry (nested closures like `() -> (1)` hang)
+- [ ] Investigate remaining hang with nested closures
+  - Issue: `f := () -> (1)` hangs, but `f := () -> 1` works
+  - Appears related to `func_lit` trying to match parenthesized expressions
+  - Need deeper investigation of PEG backtracking behavior
+
+**Debugging artifacts:**
+- `src/minimal.peg` — Minimal grammar that does NOT reproduce the bug (works correctly)
+- `src/e3_nofunc.peg` — e3 grammar without `func_lit` (used to isolate the issue)
+
+**Findings from minimal grammar testing:**
+1. `src/minimal.peg` with similar structure works — suggests issue is in e3-specific grammar interaction
+2. Removing `func_lit` from `atom` in e3.peg makes `() -> (1)` not hang (but fails to parse)
+3. The hang occurs during parsing, not execution (no trace output before hang)
+4. Pattern: any closure with parentheses in body hangs: `() -> (1)`, `(x) -> x`, `() -> () -> 1`
+5. Closures without parens in body work: `() -> 1`, `(x) -> 1`, `(a,b) -> 1`
+6. Standalone parenthesized expressions work: `f := (1)` parses fine
+7. The issue is specific to `func_lit` + parenthesized `expression` as body
+
+**Hypothesis:** When parsing `() -> (1)`, the body `(1)` triggers `func_lit` to try matching
+`(1)` as another closure. `func_lit` fails (no `->`), but something in the backtracking
+or action execution is causing an infinite loop. The minimal grammar doesn't have this
+interaction pattern.
 
 ## Done (prune when exceeding 30 items)
 - Fixed Bazel build for C++ targets:

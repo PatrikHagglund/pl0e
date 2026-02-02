@@ -1,4 +1,7 @@
-// PL/0 Level 3 Grammar
+// PL/0 Level 3 Grammar - NO FUNC_LIT for debugging
+// RESULT: Without func_lit, `() -> (1)` does not hang (but fails to parse)
+// This confirms the issue is in func_lit interaction with parenthesized expressions
+// See .agents/LEDGER.md for debugging notes
 // Adds: booleans, callables (closures), case expressions, function application
 
 program         = _ statement*
@@ -14,7 +17,7 @@ stmt_arm        = cond:or_expr "->" _ body:statement { StmtArm($cond, $body) }
 binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
                 / id:ident _ ":" { Decl($id) }
 
-expression      = &("(" _ (ident (_ "," _ ident)* _)? ")" _ "->") func_lit / case_expr / or_expr
+expression      = case_expr / or_expr
 case_expr       = "case" _ "{" _ expr_arm+ "}" _ { CaseExpr }
 expr_arm        = cond:or_expr "->" _ val:or_expr ","? _ { ExprArm($cond, $val) }
 
@@ -44,14 +47,14 @@ unary           = "-" _ e:apply_expr { Neg($e) }
                 / apply_expr
 
 apply_expr      = atom (__ atom)* _
-atom            = int_lit / bool_lit / paren_expr / id:ident { Var($id) } / block
-paren_expr      = "(" _ e:expression ")" { $e }
+atom            = int_lit / bool_lit
+                / id:ident { Var($id) }
+                / "(" _ e:expression ")" { $e }
+                / block
 
 int_lit         = digit+ { Int($0) }
 bool_lit        = "true" !idchar { True }
                 / "false" !idchar { False }
-func_lit        = "(" _ p:params? ")" _ "->" _ body:expression { Func($p, $body) }
-params          = ident _ ("," _ ident _)* ","? _ { Params }
 
 keyword         = ("case" / "loop" / "break" / "true" / "false" / "print") !idchar
 ident           = !keyword letter idchar* { Ident($0) }

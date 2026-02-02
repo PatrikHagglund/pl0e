@@ -249,14 +249,82 @@ fun peg-rule(): <parse,div> rule
 
 pub fun parse-peg(input: string): <div,exn> grammar
   match parse(input.slice, { many(peg-rule) })
-    ParseOk(g, _) -> g
+    ParseOk(g, _) -> validate-grammar(g)
     ParseError(msg, _) -> throw("PEG parse error: " ++ msg)
+
+// Validate grammar and check for common issues
+fun validate-grammar(g: grammar): <div,exn> grammar
+  val rule-names = g.map(fn(r) r.fst)
+  val refs = g.flatmap(fn(r) collect-refs(r.snd))
+  val undefined = refs.filter(fn(r) !rule-names.any(fn(n) n == r))
+  if !undefined.is-empty then
+    throw("Undefined rules: " ++ undefined.join(", "))
+  // Check for left recursion
+  val left-rec = g.filter-map(fn(r) if is-left-recursive(g, r.fst, r.snd) then Just(r.fst) else Nothing)
+  if !left-rec.is-empty then
+    throw("Left-recursive rules (will cause infinite loop): " ++ left-rec.join(", "))
+  g
+
+// Check if a rule is directly left-recursive (rule appears as first element)
+fun is-left-recursive(g: grammar, name: string, p: peg): div bool
+  match p
+    PRule(n) -> n == name || (match grammar-lookup-maybe(g, n) { Just((body, _)) -> is-left-recursive(g, name, body); Nothing -> False })
+    PSeq(Cons(first, _)) -> is-left-recursive(g, name, first)
+    PChoice(ps) -> ps.any(fn(p1) is-left-recursive(g, name, p1))
+    PCapture(_, p1) -> is-left-recursive(g, name, p1)
+    PAction(p1, _) -> is-left-recursive(g, name, p1)
+    POpt(p1) -> is-left-recursive(g, name, p1)  // Optional can be skipped, check what follows
+    _ -> False
+
+fun grammar-lookup-maybe(g: grammar, name: string): maybe<(peg, maybe<string>)>
+  match g.filter(fn(r) r.fst == name)
+    Cons((_, body, tag), _) -> Just((body, tag))
+    Nil -> Nothing
+
+pub fun show-grammar(g: grammar): div string
+  g.map(fn(r) r.fst ++ " = " ++ show-peg(r.snd)).join("\n")
+
+fun show-peg(p: peg): div string
+  match p
+    PLit(s) -> "\"" ++ s ++ "\""
+    PAny -> "."
+    PClass(cs) -> "[...]"
+    PRule(n) -> n
+    PSeq(ps) -> "(" ++ ps.map(show-peg).join(" ") ++ ")"
+    PChoice(ps) -> "(" ++ ps.map(show-peg).join(" / ") ++ ")"
+    PStar(p1) -> show-peg(p1) ++ "*"
+    PPlus(p1) -> show-peg(p1) ++ "+"
+    POpt(p1) -> show-peg(p1) ++ "?"
+    PNot(p1) -> "!" ++ show-peg(p1)
+    PAnd(p1) -> "&" ++ show-peg(p1)
+    PCapture(n, p1) -> n ++ ":" ++ show-peg(p1)
+    PAction(p1, _) -> show-peg(p1) ++ " {action}"
+
+fun collect-refs(p: peg): div list<string>
+  match p
+    PRule(name) -> [name]
+    PSeq(ps) -> ps.flatmap(collect-refs)
+    PChoice(ps) -> ps.flatmap(collect-refs)
+    PStar(p1) -> collect-refs(p1)
+    PPlus(p1) -> collect-refs(p1)
+    POpt(p1) -> collect-refs(p1)
+    PNot(p1) -> collect-refs(p1)
+    PAnd(p1) -> collect-refs(p1)
+    PCapture(_, p1) -> collect-refs(p1)
+    PAction(p1, _) -> collect-refs(p1)
+    _ -> []
 
 // === PEG Interpreter ===
 alias pstate = sslice
 
 effect peg-fail
   ctl fail(): a
+
+// Fuel effect for preventing infinite loops
+effect peg-fuel
+  fun burn(): bool  // Consume one unit of fuel, returns false if exhausted
+
+pub val default-fuel = 50000000  // Default fuel limit (50M)
 
 // === Memoization for Packrat Parsing ===
 // Key: (rule_name, position), Value: parse result or failure
@@ -327,10 +395,13 @@ fun peg-match(g: grammar, p: peg, s: pstate): <peg-fail, div> (pstate, ptree)
     PStar(p1) ->
       var cur := s
       var children := []
-      while { peg-try(g, p1, cur).bool } fn()
+      var done := False
+      while { !done } fn()
         match peg-try(g, p1, cur)
-          Just((s1, t1)) -> { cur := s1; children := Cons(t1, children) }
-          Nothing -> ()
+          Just((s1, t1)) ->
+            if s1.count == cur.count then done := True
+            else { cur := s1; children := Cons(t1, children) }
+          Nothing -> done := True
       (cur, PNode("star", children.reverse, s.string.first(s.count - cur.count).string))
     
     PPlus(p1) ->
@@ -414,19 +485,17 @@ fun peg-match-memo(g: grammar, p: peg, s: pstate, memo: memo-table, orig: pstate
       var cur := s
       var children := []
       var m := memo
-      val init = peg-try-memo(g, p1, cur, m, orig)
-      var m2 := init.fst
-      var res := init.snd
-      while { res.bool } fn()
+      var done := False
+      while { !done } fn()
+        val (m2, res) = peg-try-memo(g, p1, cur, m, orig)
         match res
           Just((s1, t1)) ->
-            cur := s1
-            children := Cons(t1, children)
-            m := m2
-            val next = peg-try-memo(g, p1, cur, m, orig)
-            m2 := next.fst
-            res := next.snd
-          Nothing -> ()
+            if s1.count == cur.count then done := True // no progress, stop
+            else
+              cur := s1
+              children := Cons(t1, children)
+              m := m2
+          Nothing -> done := True
       (m, (cur, PNode("star", children.reverse, s.string.first(s.count - cur.count).string)))
 
     PPlus(p1) ->
@@ -582,7 +651,8 @@ fun to-values(cs: list<captured<s>>): list<s>
 
 // Execute PEG with semantic actions
 // Returns (remaining_input, semantic_value) or fails
-fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fail, div> (pstate, captured<s>)
+fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fail,peg-fuel,div> (pstate, captured<s>)
+  if !burn() then fail()
   match p
     PLit(lit) ->
       if s.string.sslice/starts-with(lit).bool then
@@ -621,10 +691,13 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
     PStar(p1) ->
       var cur := s
       var vals := []
-      while { peg-exec-try(g, acts, def, p1, cur).bool } fn()
+      var done := False
+      while { !done } fn()
         match peg-exec-try(g, acts, def, p1, cur)
-          Just((s1, v1)) -> { cur := s1; vals := Cons(v1, vals) }
-          Nothing -> ()
+          Just((s1, v1)) ->
+            if s1.count == cur.count then done := True
+            else { cur := s1; vals := Cons(v1, vals) }
+          Nothing -> done := True
       val children = vals.reverse
       (cur, Captured(Nothing, def("_star", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children))))
 
@@ -632,10 +705,13 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       val (s1, v1) = peg-exec-match(g, acts, def, p1, s)
       var cur := s1
       var vals := [v1]
-      while { peg-exec-try(g, acts, def, p1, cur).bool } fn()
+      var done := False
+      while { !done } fn()
         match peg-exec-try(g, acts, def, p1, cur)
-          Just((s2, v2)) -> { cur := s2; vals := Cons(v2, vals) }
-          Nothing -> ()
+          Just((s2, v2)) ->
+            if s2.count == cur.count then done := True
+            else { cur := s2; vals := Cons(v2, vals) }
+          Nothing -> done := True
       val children = vals.reverse
       (cur, Captured(Nothing, def("_plus", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children))))
 
@@ -682,7 +758,8 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       (s1, Captured(Nothing, evaled))
 
 // Match and collect captures (for inline actions)
-fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fail, div> (pstate, captures<s>, s)
+fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fail,peg-fuel,div> (pstate, captures<s>, s)
+  if !burn() then fail()
   match p
     PSeq(ps) ->
       var cur := s
@@ -705,7 +782,9 @@ fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: pe
       var done := False
       while { !done } fn()
         match peg-exec-try(g, acts, def, p1, cur)
-          Just((s1, v1)) -> { cur := s1; vals := Cons(v1, vals) }
+          Just((s1, v1)) ->
+            if s1.count == cur.count then done := True // no progress, stop
+            else { cur := s1; vals := Cons(v1, vals) }
           Nothing -> done := True
       val children = vals.reverse.drop(1)
       val vs = to-values(children)
@@ -737,11 +816,11 @@ fun eval-iexpr(e: iexpr, txt: string, caps: captures<s>, def: action<s>): <div> 
       val v = eval-iexpr(expr, txt, caps, def)
       def("_field", f, [v], [])
 
-fun peg-exec-try(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <div> maybe<(pstate, captured<s>)>
+fun peg-exec-try(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fuel,div> maybe<(pstate, captured<s>)>
   with ctl fail() Nothing
   Just(peg-exec-match(g, acts, def, p, s))
 
-fun peg-exec-choice(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>, s: pstate): <peg-fail, div> (pstate, captured<s>)
+fun peg-exec-choice(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>, s: pstate): <peg-fail,peg-fuel,div> (pstate, captured<s>)
   match ps
     Nil -> fail()
     Cons(p, rest) ->
@@ -749,16 +828,25 @@ fun peg-exec-choice(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>,
         Just(r) -> r
         Nothing -> peg-exec-choice(g, acts, def, rest, s)
 
-// Public API for semantic action execution
-pub fun peg-exec(g: grammar, acts: actions<s>, def: action<s>, start: string, input: string): <div> maybe<s>
-  match peg-exec-try(g, acts, def, PRule(start), input.slice)
-    Just((_, v)) -> Just(v.cval)
-    Nothing -> Nothing
+fun with-fuel(max-fuel: int, action: () -> <peg-fuel|e> a): e a
+  var fuel := max-fuel
+  with fun burn()
+    if fuel <= 0 then False
+    else { fuel := fuel - 1; True }
+  action()
 
-pub fun peg-exec-partial(g: grammar, acts: actions<s>, def: action<s>, start: string, input: sslice): <div> maybe<(sslice, s)>
-  match peg-exec-try(g, acts, def, PRule(start), input)
-    Just((rest, v)) -> Just((rest, v.cval))
-    Nothing -> Nothing
+// Public API for semantic action execution
+pub fun peg-exec(g: grammar, acts: actions<s>, def: action<s>, start: string, input: string, max-fuel: int = default-fuel): <div> maybe<s>
+  with-fuel(max-fuel) fn()
+    match peg-exec-try(g, acts, def, PRule(start), input.slice)
+      Just((_, v)) -> Just(v.cval)
+      Nothing -> Nothing
+
+pub fun peg-exec-partial(g: grammar, acts: actions<s>, def: action<s>, start: string, input: sslice, max-fuel: int = default-fuel): <div> maybe<(sslice, s)>
+  with-fuel(max-fuel) fn()
+    match peg-exec-try(g, acts, def, PRule(start), input)
+      Just((rest, v)) -> Just((rest, v.cval))
+      Nothing -> Nothing
 
 // Dummy main for standalone compilation
 pub fun main(): console ()

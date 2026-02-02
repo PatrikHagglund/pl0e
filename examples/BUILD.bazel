@@ -24,3 +24,9 @@ filegroup(
     srcs = glob(["*.e0"]),
     visibility = ["//visibility:public"],
 )
+
+filegroup(
+    name = "e3_examples",
+    srcs = glob(["*.e3"]),
+    visibility = ["//visibility:public"],
+)

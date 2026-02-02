@@ -4,7 +4,7 @@
 
 e3 extends e2 with:
 - **Booleans** (`true`, `false`, `&&`, `||`, `!`)
-- **Callables** (closures via `(params) -> expr`)
+- **Callables** (closures via `\params -> expr`, Haskell-style)
 - **Case expressions** (in addition to case statements)
 - **Function application** via juxtaposition
 
@@ -26,7 +26,7 @@ stmt_arm        = or_expr "->" _ statement
 binding         = ident _ ":=" _ expression
                 / ident _ ":"
 
-expression      = case_expr / or_expr
+expression      = func_lit / case_expr / or_expr
 case_expr       = "case" _ "{" _ expr_arm+ "}" _
 expr_arm        = or_expr "->" _ or_expr ","? _
 
@@ -41,12 +41,12 @@ sum_expr        = product (("+" / "-") _ product)*
 product         = unary (("*" / "/" / "%") _ unary)*
 unary           = "-" _ apply_expr / apply_expr
 
-apply_expr      = atom (hs atom)*
-atom            = int_lit / bool_lit / func_lit / ident / "(" _ expression ")" _ / block
+apply_expr      = atom (__ atom)*
+atom            = int_lit / bool_lit / "(" _ expression ")" _ / ident / block
 
 int_lit         = digit+ _
 bool_lit        = ("true" / "false") !idchar _
-func_lit        = "(" _ params? ")" _ "->" _ expression
+func_lit        = "\" _ params? "->" _ expression
 params          = ident _ ("," _ ident _)* ","? _
 
 keyword         = ("case" / "loop" / "break" / "true" / "false" / "print") !idchar
@@ -74,11 +74,11 @@ Type bridge: relational operators `==` `!=` `<` `>` `<=` `>=` map ℤ × ℤ →
 
 ### Callables
 
-**Definition**: `(x, y) -> expr` creates a closure capturing the current environment.
+**Definition**: `\x -> expr` or `\x, y -> expr` creates a closure capturing the current environment.
 
 **Application**: `f x` applies function `f` to argument `x`. Multi-argument: `f x y` is `(f x) y` (left-associative).
 
-**Currying**: `(x, y) -> x + y` applied to one argument returns a closure awaiting the second.
+**Currying**: `\x, y -> x + y` applied to one argument returns a closure awaiting the second.
 
 ### Case Expressions
 
@@ -103,8 +103,8 @@ Evaluates arms top-to-bottom; returns value of first arm whose condition is trut
 ### Higher-Order Function
 
 ```e3
-twice := (f, x) -> f (f x)
-inc := (n) -> n + 1
+twice := \f -> \x -> f (f x)
+inc := \n -> n + 1
 print twice inc 5  // 7
 ```
 
@@ -121,6 +121,15 @@ loop {
 print result
 ```
 
+### Y Combinator (Recursion without Self-Reference)
+
+```e3
+Y := \f -> (\x -> f (\y -> x x y)) (\x -> f (\y -> x x y))
+fact := Y (\self -> \n -> case { n == 0 -> 1, true -> n * self (n - 1) })
+print fact 5  // 120
+```
+
 ## Known Limitations
 
 - No recursive closures (closure cannot reference itself by name)
+- Use Y combinator for recursion (see example above)

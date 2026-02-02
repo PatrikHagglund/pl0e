@@ -16,12 +16,12 @@ print x
 
 // Function
 inc :
-inc := (n) -> n + 1
+inc := \n -> n + 1
 print inc 5
 
 // Case in function
 is_zero :
-is_zero := (n) -> case {
+is_zero := \n -> case {
   n == 0 -> true,
   true -> false
 }

@@ -3,7 +3,7 @@
 
 // --- e3 new: booleans, callables, case expressions ---
 is_even :
-is_even := (x) -> case {
+is_even := \x -> case {
   x % 2 == 0 -> true,
   true       -> false
 }
@@ -12,7 +12,7 @@ flag := is_even 4  // true
 
 // --- Arrays as functions (index -> value) ---
 arr :
-arr := (i) -> case {
+arr := \i -> case {
   i == 0 -> 10,
   i == 1 -> 20,
   i == 2 -> 30,
@@ -24,7 +24,7 @@ v2 := arr 2  // 30
 
 // "Update" array by wrapping with a new function
 arr2 :
-arr2 := (i) -> case {
+arr2 := \i -> case {
   i == 1 -> 99,
   true   -> arr i
 }
@@ -33,7 +33,7 @@ v1 := arr2 1  // 99
 // --- Length + bounds check ---
 len := 3
 safe_get :
-safe_get := (i) -> case {
+safe_get := \i -> case {
   i < 0      -> -1,
   i >= len   -> -1,
   true       -> arr i
@@ -45,10 +45,10 @@ safe_get := (i) -> case {
 // sel == 1 => head
 // sel == 2 => tail (another function)
 nil :
-nil := (sel) -> 0
+nil := \sel -> 0
 
 cons :
-cons := (h, t) -> (sel) -> case {
+cons := \h -> \t -> \sel -> case {
   sel == 0 -> 1,
   sel == 1 -> h,
   sel == 2 -> t,
@@ -56,10 +56,10 @@ cons := (h, t) -> (sel) -> case {
 }
 
 list :
-list := cons (1, cons (2, cons (3, nil)))
+list := cons 1 (cons 2 (cons 3 nil))
 
 sum :
-sum := (lst) -> case {
+sum := \lst -> case {
   lst 0 == 0 -> 0,
   true       -> (lst 1) + (sum (lst 2))
 }

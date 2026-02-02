@@ -13,9 +13,11 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Next
 
-- Fix e3 grammar exponential backtracking on `((x) -> x) (1)` patterns
-  - Memoization doesn't help (backtracking inside lookahead, not at rule boundaries)
-  - Options: refactor grammar, memoize inside lookahead, different closure parsing
+- PEG static analysis: warn about potential backtracking issues
+  - Detect rules with common prefixes in alternatives
+  - Warn about lookahead containing recursive rules
+  - Flag right-recursive rules that could be left-factored
+- PEG runtime monitoring: per-rule fuel stats, backtrack-to-success ratio
 - Create proper `rules_koka` for Bazel (library rule, dependency tracking, toolchain abstraction)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Explore efficient interpreters (Graal/Truffle, simple JIT)
@@ -29,6 +31,10 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- Fix e3 grammar exponential backtracking
+  - Changed lambda syntax from `(params) -> body` to `\params -> body` (Haskell-style)
+  - Refactored grammar to left-factored form to avoid re-parsing in binary operators
+  - Y combinator example now works
 - Nullable loop detection in PEG (`e*`/`e+` where `e` can match empty)
   - Fixed-point iteration to compute nullable rules, then check for problematic patterns
 - PEG hardening: progress checks, fuel counter, left recursion detection

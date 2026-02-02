@@ -162,6 +162,58 @@ print_stmt = "print" _ e:expression { Print($e) }
 loop_stmt  = "loop" _ body:statement { Loop($body) }
 ```
 
+## Grammar Design Guidelines
+
+PEG parsers can exhibit exponential backtracking on certain grammar patterns. Follow these guidelines to avoid performance issues:
+
+### Prefer Prefix Disambiguation
+
+Use distinct prefixes to signal different constructs:
+
+```peg
+// Good: \ prefix immediately signals lambda
+func_lit = "\" _ params? "->" _ expression
+
+// Bad: requires lookahead to distinguish from parenthesized expression
+func_lit = "(" _ params? ")" _ "->" _ expression
+expression = &("(" ... ")" "->") func_lit / ... / paren_expr
+```
+
+### Left-Factor Binary Operators
+
+Avoid right-recursive rules that re-parse on backtrack:
+
+```peg
+// Good: parse base once, collect tails
+sum_expr = product sum_tail*
+sum_tail = "+" _ product / "-" _ product
+
+// Bad: re-parses product when "+" fails
+sum_expr = l:product "+" _ r:sum_expr / product
+```
+
+### Avoid Unbounded Lookahead
+
+Lookahead containing recursive rules can cause exponential behavior:
+
+```peg
+// Bad: lookahead recurses into expression
+expression = &(complex_pattern) rule1 / rule2
+
+// Better: extract lookahead into named rule (gets memoized)
+complex_check = complex_pattern
+expression = &complex_check rule1 / rule2
+
+// Best: redesign to avoid lookahead entirely
+```
+
+### Test with Nested Structures Early
+
+Backtracking issues often only appear with deeply nested input. Test with patterns like:
+- `((((x))))` - nested parentheses
+- `\f -> \x -> \y -> ...` - nested lambdas
+- `a + b + c + d + ...` - long operator chains
+
 ## Implementation Notes
 
 - Backtracking via Koka's `peg-fail` effect

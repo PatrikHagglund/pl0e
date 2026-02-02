@@ -14,32 +14,33 @@ stmt_arm        = cond:or_expr "->" _ body:statement { StmtArm($cond, $body) }
 binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
                 / id:ident _ ":" { Decl($id) }
 
-expression      = &("(" _ (ident (_ "," _ ident)* _)? ")" _ "->") func_lit / case_expr / or_expr
+expression      = func_lit / case_expr / or_expr
 case_expr       = "case" _ "{" _ expr_arm+ "}" _ { CaseExpr }
 expr_arm        = cond:or_expr "->" _ val:or_expr ","? _ { ExprArm($cond, $val) }
 
-or_expr         = l:and_expr "||" _ r:or_expr { Or($l, $r) }
-                / and_expr
-and_expr        = l:not_expr "&&" _ r:and_expr { And($l, $r) }
-                / not_expr
+// Refactored to avoid backtracking: use left-factored rules
+or_expr         = and_expr or_tail*
+or_tail         = "||" _ and_expr { Or }
+and_expr        = not_expr and_tail*
+and_tail        = "&&" _ not_expr { And }
 not_expr        = "!" _ e:cmp_expr { Not($e) }
                 / cmp_expr
 
-cmp_expr        = l:sum_expr "==" _ r:sum_expr { Eq($l, $r) }
-                / l:sum_expr "!=" _ r:sum_expr { Ne($l, $r) }
-                / l:sum_expr "<=" _ r:sum_expr { Le($l, $r) }
-                / l:sum_expr ">=" _ r:sum_expr { Ge($l, $r) }
-                / l:sum_expr "<" _ r:sum_expr { Lt($l, $r) }
-                / l:sum_expr ">" _ r:sum_expr { Gt($l, $r) }
-                / sum_expr
+cmp_expr        = sum_expr cmp_tail?
+cmp_tail        = "==" _ r:sum_expr { Eq }
+                / "!=" _ r:sum_expr { Ne }
+                / "<=" _ r:sum_expr { Le }
+                / ">=" _ r:sum_expr { Ge }
+                / "<" _ r:sum_expr { Lt }
+                / ">" _ r:sum_expr { Gt }
 
-sum_expr        = l:product "+" _ r:sum_expr { Add($l, $r) }
-                / l:product "-" _ r:sum_expr { Sub($l, $r) }
-                / product
-product         = l:unary "*" _ r:product { Mul($l, $r) }
-                / l:unary "/" _ r:product { Div($l, $r) }
-                / l:unary "%" _ r:product { Mod($l, $r) }
-                / unary
+sum_expr        = product sum_tail*
+sum_tail        = "+" _ product { Add }
+                / "-" _ product { Sub }
+product         = unary product_tail*
+product_tail    = "*" _ unary { Mul }
+                / "/" _ unary { Div }
+                / "%" _ unary { Mod }
 unary           = "-" _ e:apply_expr { Neg($e) }
                 / apply_expr
 
@@ -50,7 +51,7 @@ paren_expr      = "(" _ e:expression ")" { $e }
 int_lit         = digit+ { Int($0) }
 bool_lit        = "true" !idchar { True }
                 / "false" !idchar { False }
-func_lit        = "(" _ p:params? ")" _ "->" _ body:expression { Func($p, $body) }
+func_lit        = "\\" _ p:params? "->" _ body:expression { Func($p, $body) }
 params          = ident _ ("," _ ident _)* ","? _ { Params }
 
 keyword         = ("case" / "loop" / "break" / "true" / "false" / "print") !idchar

@@ -1,9 +1,11 @@
+Always read README.md at session start.
+
 ## Ledger
 
 Maintain a single Ledger for this workspace in
-`.agents/LEDGER.md`. The ledger is the canonical session briefing designed to
-survive context compaction; do not rely on earlier chat text unless it’s
-reflected in the ledger.
+`.agents/rules/LEDGER.md`. The ledger is the canonical session
+briefing designed to survive context compaction; do not rely on
+earlier chat text unless it’s reflected in the ledger.
 
 ### How it works
 - At the start of every assistant turn: read `LEDGER.md`. Update it before and after the work.

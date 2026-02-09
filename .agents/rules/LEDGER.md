@@ -9,7 +9,6 @@ Explore simple language design/implementation inspired by PL/0.
 - Keep languages small
 - Progressive complexity (e0–e6), each level a superset of the previous
 - Multiple implementation approaches (Koka interpreters, C++ interpreter/compiler)
-- Example files demonstrate: 1) new features, 2) encoding next-level features with current primitives
 
 ## Next
 
@@ -21,6 +20,12 @@ Explore simple language design/implementation inspired by PL/0.
 - Standard library?
 - Symbolic expressions (computer algebra)?
 - Fuzzing with csmith-style tools
+- Explore using Zig/Koru, and Ocaml as implementation langagues.
+- Explore Rascal and/or K Framework for specifications.
+- Explore adding support for syntactic sugar (using rewrite rules in the PEG
+  eval)
+- Explore using Beads for task tracking (replacing this ledger).
+- Explore using BuildStream/BuildGrid.
 
 ## Now
 

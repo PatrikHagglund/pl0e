@@ -1,0 +1,283 @@
+// efuzz: random e1 program generator with co-evaluation (see docs/FUZZING.md)
+//
+// Generates well-defined e1 programs (termination by construction) together
+// with their expected output, for differential testing across implementations.
+//
+// Usage: efuzz [seed] [size]
+//
+// Output: the e1 program, followed by its expected output encoded as
+// trailing comments ("// expect: <line>"), so the output is itself a valid
+// e1 program that any implementation can run directly.
+//
+// Well-definedness invariants:
+// - Loops are counter-down: counter set to a literal bound, decremented each
+//   iteration, break_ifz on the counter; bodies never assign the counter.
+// - If-patterns (per E1_SPEC.md) end with an unconditional "break_ifz 0".
+// - Variables are only read after being assigned; vars first assigned inside
+//   a loop/if body are not read after the body (the body may not execute).
+// - Binary expressions are fully parenthesized: +/- associativity is
+//   implementation-defined in e1, so chains would be an unfair oracle.
+
+module efuzz
+
+import std/os/env
+
+// === AST ===
+// Structured loop/if instead of raw loop/break_ifz: termination is a
+// construction invariant, not a property to verify afterwards.
+
+type fexpr
+  FLit(n: int)
+  FVar(name: string)
+  FNeg(e: fexpr)
+  FAdd(l: fexpr, r: fexpr)
+  FSub(l: fexpr, r: fexpr)
+
+type fstmt
+  FDecl(name: string)
+  FAssign(name: string, e: fexpr)
+  FPrint(e: fexpr)
+  FLoop(counter: string, bound: int, body: list<fstmt>)
+  FIf(cond: string, body: list<fstmt>)
+
+// === Deterministic RNG (64-bit LCG, Knuth constants) ===
+
+struct genst
+  seed: int
+  nextid: int
+  vars: list<string>   // assigned variables (readable and assignable)
+  ros: list<string>    // read-only variables (loop counters: assigning one
+                       // could break guaranteed termination)
+
+fun rng-next(st: genst): (genst, int)
+  val s2 = (st.seed * 6364136223846793005 + 1442695040888963407) % 18446744073709551616
+  (Genst(s2, st.nextid, st.vars, st.ros), (s2 / 8589934592) % 2147483648)
+
+fun pick(st: genst, n: int): (genst, int)
+  val (st2, r) = rng-next(st)
+  (st2, r % n)
+
+fun fresh(st: genst, pre: string): (genst, string)
+  (Genst(st.seed, st.nextid + 1, st.vars, st.ros), pre ++ st.nextid.show)
+
+fun add-var(st: genst, name: string): genst
+  Genst(st.seed, st.nextid, Cons(name, st.vars), st.ros)
+
+fun add-ro(st: genst, name: string): genst
+  Genst(st.seed, st.nextid, st.vars, Cons(name, st.ros))
+
+fun restore-vars(st: genst, saved: list<string>, saved-ros: list<string>): genst
+  Genst(st.seed, st.nextid, saved, saved-ros)
+
+fun pick-from(st: genst, vs: list<string>): (genst, maybe<string>)
+  match vs
+    Nil -> (st, Nothing)
+    _ ->
+      val (st2, i) = pick(st, vs.length)
+      (st2, vs.drop(i).head)
+
+// Any readable variable (for expressions)
+fun pick-var(st: genst): (genst, maybe<string>)
+  pick-from(st, st.vars ++ st.ros)
+
+// Assignable variable (for assignment targets)
+fun pick-target(st: genst): (genst, maybe<string>)
+  pick-from(st, st.vars)
+
+// === Generator ===
+
+fun gen-expr(st: genst, depth: int): div (genst, fexpr)
+  val (st2, r) = pick(st, 100)
+  if depth <= 0 || r < 30 then
+    if r % 2 == 0 && !st2.vars.is-nil then
+      val (st3, mv) = pick-var(st2)
+      match mv
+        Just(v) -> (st3, FVar(v))
+        Nothing -> gen-lit(st3)
+    else gen-lit(st2)
+  elif r < 45 && !st2.vars.is-nil then
+    val (st3, mv) = pick-var(st2)
+    match mv
+      Just(v) -> (st3, FVar(v))
+      Nothing -> gen-lit(st3)
+  elif r < 55 then
+    val (st3, e) = gen-expr(st2, depth - 1)
+    (st3, FNeg(e))
+  elif r < 80 then
+    val (st3, l) = gen-expr(st2, depth - 1)
+    val (st4, rr) = gen-expr(st3, depth - 1)
+    (st4, FAdd(l, rr))
+  else
+    val (st3, l) = gen-expr(st2, depth - 1)
+    val (st4, rr) = gen-expr(st3, depth - 1)
+    (st4, FSub(l, rr))
+
+fun gen-lit(st: genst): (genst, fexpr)
+  val (st2, n) = pick(st, 100)
+  (st2, FLit(n))
+
+// Assignment, optionally followed by accumulator mixing so every value
+// affects the final printed result (fuzzgen's self-checking accumulator).
+fun gen-assign(st: genst): div (genst, list<fstmt>)
+  val (st2, r) = pick(st, 100)
+  val (st3, name) =
+    if r < 60 || st2.vars.is-nil then
+      val (sta, n) = fresh(st2, "v")
+      (sta, n)
+    else
+      val (sta, mv) = pick-target(st2)
+      (sta, mv.default("v0"))
+  val (st4, e) = gen-expr(st3, 3)
+  val st5 = if st4.vars.find(fn(v) v == name).is-just then st4 else st4.add-var(name)
+  val (st6, mix) = pick(st5, 100)
+  if mix < 50 then
+    (st6, [FAssign(name, e), FAssign("acc", FAdd(FVar("acc"), FVar(name)))])
+  else
+    (st6, [FAssign(name, e)])
+
+fun gen-stmt(st: genst, depth: int): div (genst, list<fstmt>)
+  val (st2, r) = pick(st, 100)
+  if r < 35 then gen-assign(st2)
+  elif r < 50 then
+    val (st3, e) = gen-expr(st2, 2)
+    (st3, [FPrint(e)])
+  elif r < 58 then
+    val (st3, name) = fresh(st2, "d")
+    (st3, [FDecl(name)])  // declared but never read: initial value is implementation-defined
+  elif r < 80 && depth < 2 then
+    val saved = st2.vars
+    val saved-ros = st2.ros
+    val (st3, counter) = fresh(st2, "c")
+    val (st4, b) = pick(st3, 6)
+    val (st5, body) = gen-stmts(st4.add-ro(counter), depth + 1, 0)
+    (st5.restore-vars(saved, saved-ros), [FLoop(counter, b + 1, body)])
+  elif depth < 2 && !st2.vars.is-nil then
+    val saved = st2.vars
+    val saved-ros = st2.ros
+    val (st3, mv) = pick-var(st2)
+    val (st4, body) = gen-stmts(st3, depth + 1, 0)
+    (st4.restore-vars(saved, saved-ros), [FIf(mv.default("acc"), body)])
+  else gen-assign(st2)
+
+// Generate 1-3 statements (count == 0 picks randomly).
+fun gen-stmts(st: genst, depth: int, count: int): div (genst, list<fstmt>)
+  val (st2, n) = if count > 0 then (st, count) else
+    val (sta, r) = pick(st, 3)
+    (sta, r + 1)
+  gen-stmts-n(st2, depth, n)
+
+fun gen-stmts-n(st: genst, depth: int, n: int): div (genst, list<fstmt>)
+  if n <= 0 then (st, [])
+  else
+    val (st2, ss1) = gen-stmt(st, depth)
+    val (st3, ss2) = gen-stmts-n(st2, depth, n - 1)
+    (st3, ss1 ++ ss2)
+
+fun gen-program(seed: int, size: int): div list<fstmt>
+  val st0 = Genst(seed * 2 + 1, 0, [], []).add-var("acc")
+  val (_, stmts) = gen-stmts-n(st0, 0, size)
+  Cons(FAssign("acc", FLit(0)), stmts) ++ [FPrint(FVar("acc"))]
+
+// === Reference evaluator (the ground-truth oracle) ===
+
+alias fenv = list<(string, int)>
+
+fun fget(e: fenv, key: string): int
+  match e.filter(fn(p) p.fst == key)
+    Cons((_, v), _) -> v
+    Nil -> 0
+
+fun fset(e: fenv, key: string, v: int): fenv
+  Cons((key, v), e.filter(fn(p) p.fst != key))
+
+fun feval(e: fenv, ex: fexpr): int
+  match ex
+    FLit(n) -> n
+    FVar(x) -> fget(e, x)
+    FNeg(x) -> 0 - feval(e, x)
+    FAdd(l, r) -> feval(e, l) + feval(e, r)
+    FSub(l, r) -> feval(e, l) - feval(e, r)
+
+// Returns (env, output lines in reverse order)
+fun fexec(e: fenv, s: fstmt, out: list<string>): div (fenv, list<string>)
+  match s
+    FDecl(_) -> (e, out)
+    FAssign(x, ex) -> (fset(e, x, feval(e, ex)), out)
+    FPrint(ex) -> (e, Cons(feval(e, ex).show, out))
+    FLoop(c, b, body) -> fexec-loop(fset(e, c, b), c, body, out)
+    FIf(cond, body) ->
+      if fget(e, cond) != 0 then fexec-all(e, body, out)
+      else (e, out)
+
+fun fexec-loop(e: fenv, c: string, body: list<fstmt>, out: list<string>): div (fenv, list<string>)
+  if fget(e, c) == 0 then (e, out)
+  else
+    val (e2, out2) = fexec-all(e, body, out)
+    fexec-loop(fset(e2, c, fget(e2, c) - 1), c, body, out2)
+
+fun fexec-all(e: fenv, ss: list<fstmt>, out: list<string>): div (fenv, list<string>)
+  match ss
+    Nil -> (e, out)
+    Cons(s, rest) ->
+      val (e2, out2) = fexec(e, s, out)
+      fexec-all(e2, rest, out2)
+
+fun run-program(prog: list<fstmt>): div list<string>
+  val (_, out) = fexec-all([], prog, [])
+  out.reverse
+
+// === Pretty-printer ===
+
+// Wrap in parens unless already an atom or self-parenthesizing.
+fun show-atom(ex: fexpr): div string
+  match ex
+    FLit(_) -> show-fexpr(ex)
+    FVar(_) -> show-fexpr(ex)
+    FNeg(_) -> "(" ++ show-fexpr(ex) ++ ")"
+    _ -> show-fexpr(ex)  // FAdd/FSub already parenthesized
+
+fun show-fexpr(ex: fexpr): div string
+  match ex
+    FLit(n) -> n.show
+    FVar(x) -> x
+    FNeg(e) -> "-" ++ show-atom(e)
+    FAdd(l, r) -> "(" ++ show-fexpr(l) ++ " + " ++ show-fexpr(r) ++ ")"
+    FSub(l, r) -> "(" ++ show-fexpr(l) ++ " - " ++ show-fexpr(r) ++ ")"
+
+fun show-fstmt(s: fstmt, ind: string): div list<string>
+  match s
+    FDecl(x) -> [ind ++ x ++ ":"]
+    FAssign(x, e) -> [ind ++ x ++ " := " ++ show-fexpr(e)]
+    FPrint(e) -> [ind ++ "print " ++ show-fexpr(e)]
+    FLoop(c, b, body) ->
+      [ind ++ c ++ " := " ++ b.show,
+       ind ++ "loop {",
+       ind ++ "  break_ifz " ++ c]
+        ++ show-fstmts(body, ind ++ "  ")
+        ++ [ind ++ "  " ++ c ++ " := " ++ c ++ " - 1",
+            ind ++ "}"]
+    FIf(cond, body) ->
+      [ind ++ "loop {",
+       ind ++ "  break_ifz " ++ cond]
+        ++ show-fstmts(body, ind ++ "  ")
+        ++ [ind ++ "  break_ifz 0",
+            ind ++ "}"]
+
+fun show-fstmts(ss: list<fstmt>, ind: string): div list<string>
+  ss.flatmap(fn(s) show-fstmt(s, ind))
+
+// === Main ===
+
+pub fun main()
+  val args = get-args()
+  val seed = match args
+    Cons(s, _) -> s.parse-int.default(42)
+    Nil -> 42
+  val size = match args
+    Cons(_, Cons(s, _)) -> s.parse-int.default(20)
+    _ -> 20
+
+  val prog = gen-program(seed, size)
+  println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show)
+  show-fstmts(prog, "").foreach(println)
+  run-program(prog).foreach(fn(line) println("// expect: " ++ line))

@@ -19,7 +19,9 @@ Explore simple language design/implementation inspired by PL/0.
 - Explore efficient interpreters (Graal/Truffle, simple JIT)
 - Standard library?
 - Symbolic expressions (computer algebra)?
-- Fuzzing with csmith-style tools
+- efuzz Phases 2-4 (docs/FUZZING.md): e2 constructs, e3/e4, mutator/reducer,
+  CI integration. Blocked for cross-level diffing: superset violation (see
+  Open questions)
 - Explore using Zig/Koru, and Ocaml as implementation langagues.
 - Explore Rascal and/or K Framework for specifications.
 - Explore adding support for syntactic sugar (using rewrite rules in the PEG
@@ -27,11 +29,32 @@ Explore simple language design/implementation inspired by PL/0.
 - Explore using Beads for task tracking (replacing this ledger).
 - Explore using BuildStream/BuildGrid.
 
+## Open questions
+
+- Superset violation found by efuzz: e2/e3/e4 grammars dropped `break_ifz`
+  (replaced by case/break), so e1 programs with loops do not parse at
+  level 2+ (even examples/factorial.e1 fails on e3peg), contradicting the
+  README/DESIGN "strict superset" claim. Decide: add break_ifz back to
+  e2+ grammars, or revise the claim. Until then e2/e3/e4 are excluded
+  from the efuzz diff matrix.
+
 ## Now
 
 (No active task)
 
 ## Done (prune when exceeding 20 items)
+
+- efuzz Phase 1 (docs/FUZZING.md): e1 differential fuzzing
+  - src/efuzz.koka: random well-defined e1 programs (counter-down loops,
+    if-patterns, fully-parenthesized exprs since +/- associativity is
+    implementation-defined) with co-evaluated expected output emitted as
+    `// expect:` comments
+  - fuzz/e1_diff.sh: //fuzz:diff runs e1, e1_koka, e1peg, LLVM-JIT (via
+    hermetic lli) + e1_compile emit check vs expected; failures saved to
+    fuzz-failures/. //fuzz:efuzz_smoke = 10-seed sh_test (passes in ~1s)
+  - 180 seeds (sizes 15-40): 0 mismatches
+  - Env note (Fedora Rawhide container): lacks git and diffutils; parallel
+    Koka compiles get OOM-killed — use bazel build --jobs=1 for Koka targets
 
 - Implement e4peg interpreter (arrays, pattern matching)
   - Arrays stored as Koka vectors for O(1) indexed access

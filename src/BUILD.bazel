@@ -73,6 +73,14 @@ koka_binary(
     visibility = ["//visibility:public"],
 )
 
+# Random e1 program generator for differential fuzzing (docs/FUZZING.md)
+koka_binary(
+    name = "efuzz",
+    main = "efuzz.koka",
+    srcs = ["efuzz.koka"],
+    visibility = ["//visibility:public"],
+)
+
 # Export grammar files for runtime use
 exports_files(glob(["*.peg"]))
 

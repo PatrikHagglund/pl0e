@@ -7,7 +7,9 @@ Explore simple language design/implementation inspired by PL/0.
 ## Key decisions
 
 - Keep languages small
-- Progressive complexity (e0–e6), each level a superset of the previous
+- Progressive complexity (e0–e6), each level *almost* a strict superset of
+  the previous. Deliberate deviations (DESIGN.md "Superset deviations"):
+  break_ifz dropped at e2+ (too ugly above e1); e4 case requires a scrutinee
 - Multiple implementation approaches (Koka interpreters, C++ interpreter/compiler)
 
 ## Next
@@ -20,8 +22,8 @@ Explore simple language design/implementation inspired by PL/0.
 - Standard library?
 - Symbolic expressions (computer algebra)?
 - efuzz Phases 2-4 (docs/FUZZING.md): e2 constructs, e3/e4, mutator/reducer,
-  CI integration. Blocked for cross-level diffing: superset violation (see
-  Open questions)
+  CI integration. Per-level diff matrices: e2 programs run on e2peg+e3peg;
+  e3 only on e3peg; e4 only on e4peg (superset deviations, DESIGN.md)
 - Explore using Zig/Koru, and Ocaml as implementation langagues.
 - Explore Rascal and/or K Framework for specifications.
 - Explore adding support for syntactic sugar (using rewrite rules in the PEG
@@ -31,18 +33,21 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Open questions
 
-- Superset violation found by efuzz: e2/e3/e4 grammars dropped `break_ifz`
-  (replaced by case/break), so e1 programs with loops do not parse at
-  level 2+ (even examples/factorial.e1 fails on e3peg), contradicting the
-  README/DESIGN "strict superset" claim. Decide: add break_ifz back to
-  e2+ grammars, or revise the claim. Until then e2/e3/e4 are excluded
-  from the efuzz diff matrix.
+(none)
 
 ## Now
 
 (No active task)
 
 ## Done (prune when exceeding 20 items)
+
+- Resolve superset question: claim revised to "almost a strict superset"
+  (user decision 2026-06-11). break_ifz stays out of e2+ ("effective at e1,
+  too ugly higher up"); e4 scrutinee-case found as second deviation (e2/e3
+  guard-style `case { }` does not parse at e4; e2→e3 verified to hold).
+  Documented in DESIGN.md "Superset deviations", README, FUZZING.md
+- Env: container upgraded (125 GB RAM, 16 cores, git/diffutils/sudo);
+  parallel Koka builds no longer OOM — --jobs=1 workaround obsolete
 
 - efuzz Phase 1 (docs/FUZZING.md): e1 differential fuzzing
   - src/efuzz.koka: random well-defined e1 programs (counter-down loops,

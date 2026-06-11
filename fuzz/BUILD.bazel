@@ -3,8 +3,9 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Differential fuzzing for e1 (see docs/FUZZING.md):
 #   bazel run //fuzz:diff -- <count> <start-seed> <size>
-# e2/e3/e4 PEG interpreters are not in the matrix yet: their grammars lack
-# break_ifz, so they cannot parse e1 programs with loops.
+# e2/e3/e4 PEG interpreters are not in the matrix: their grammars lack
+# break_ifz by design (docs/DESIGN.md "Superset deviations"), so they cannot
+# parse e1 programs with loops.
 _DIFF_ARGS = [
     "$(location //src:efuzz)",
     "$(location //src:e1)",

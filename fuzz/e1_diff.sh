@@ -7,9 +7,9 @@
 # (compiling its output needs a host C++ compiler); the LLVM backend is
 # executed via the hermetic lli JIT.
 #
-# NOTE: e2/e3/e4 PEG interpreters are not in the matrix yet: their grammars
-# dropped break_ifz (replaced by case/break), so despite the documented
-# "strict superset" property they cannot parse e1 programs with loops.
+# NOTE: e2/e3/e4 PEG interpreters are not in the matrix: their grammars
+# deliberately dropped break_ifz (replaced by case/break), so they cannot
+# parse e1 programs with loops. See "Superset deviations" in docs/DESIGN.md.
 set -u
 
 EFUZZ="$1"

@@ -3,10 +3,29 @@
 ## Language Progression (e0 through e6)
 
 ### Philosophy
-Each level is a strict superset of the previous. This allows:
+Each level is *almost* a strict superset of the previous. This allows:
 - Studying what each feature adds to expressiveness
 - Demonstrating how higher-level features can be emulated with lower-level primitives
 - Incremental implementation complexity
+
+A strict superset was the original rule. It is deliberately broken in a few
+places where keeping a low-level construct would be too ugly at higher
+levels (see "Superset deviations" below).
+
+### Superset deviations
+
+Pragmatic, deliberate breaks of the superset rule (surfaced by the
+differential-fuzzing work, see [FUZZING.md](FUZZING.md)):
+
+| Levels | Deviation | Rationale |
+|--------|-----------|-----------|
+| e1 → e2 | `break_ifz` dropped | Effective as e1's minimal conditional primitive (Minsky machine), but too ugly once `case` + `break` exist |
+| e3 → e4 | `case` requires a scrutinee | e4's pattern matching needs `case expr { pattern -> ... }`; the guard form `case { cond -> ... }` no longer parses |
+
+Consequences:
+- e1 programs that use loops do not parse at level 2+ (e.g. `examples/factorial.e1`).
+- e2/e3 programs that use `case` do not parse at level 4.
+- e2 → e3 is (so far) a true superset: all e2 examples run unchanged on e3peg.
 
 ### Level Rationale
 

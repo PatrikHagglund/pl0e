@@ -22,14 +22,20 @@ generator's prediction. Failing programs and outputs are saved to
 
 ## Findings so far
 
-- **The "strict superset" property does not hold between e1 and e2.** The
-  e2/e3/e4 grammars dropped `break_ifz` (replaced by `case` + `break`), so
-  no e1 program containing a loop parses at level 2+ (even
-  `examples/factorial.e1` fails on e3peg). README.md, docs/DESIGN.md, and
-  the level table all state each level is a strict superset. Either
-  `break_ifz` should be added back to the e2+ grammars, or the superset
-  claim needs revising. Until resolved, the e2/e3/e4 PEG interpreters are
-  excluded from the diff matrix.
+- **The level progression is "almost" a strict superset (resolved: claim
+  revised).** Differential fuzzing surfaced two deviations, now documented
+  as deliberate in [DESIGN.md](DESIGN.md):
+  - e2/e3/e4 dropped `break_ifz` (superseded by `case` + `break`), so e1
+    programs with loops do not parse at level 2+.
+  - e4 `case` requires a scrutinee (for pattern matching), so e2/e3
+    guard-style `case { ... }` programs do not parse at level 4.
+
+  Resolution: the README/DESIGN claim was revised to "almost a strict
+  superset" rather than changing the grammars (`break_ifz` is effective at
+  the e1 level but too ugly to carry into higher levels). Consequence for
+  the diff matrix: e1 programs run only on e1 implementations; Phase 2 e2
+  programs can additionally run on e3peg (e2 → e3 holds: all e2 examples
+  run unchanged) but not on e4peg.
 
 ## Background
 
@@ -147,6 +153,10 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
 5. **Later (as e5/e6 interpreters land)** — records/unit, then static
    typing. e6 adds a new oracle: well-typed-by-construction programs
    must type-check; deliberately ill-typed mutations must be rejected.
+
+Note (superset deviations, see above): per-level diff matrices are
+e1 → {e1, e1_koka, e1peg, LLVM JIT, cpp-emit}, e2 → {e2peg, e3peg},
+e3 → {e3peg}, e4 → {e4peg}.
 
 ## Open questions
 

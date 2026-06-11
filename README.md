@@ -14,7 +14,7 @@ Currently in an initial work-in-progress state.
 
 **Philosophy:**
 - Keep languages small
-- Progressive complexity — currently seven levels (e0–e6), each a superset of the previous
+- Progressive complexity — currently seven levels (e0–e6), each almost a strict superset of the previous
 - Try several implementation approaches
 
 The "e" in e0–e6 may stand for "experiment" or "exploration".
@@ -47,7 +47,7 @@ Uses hermetic LLVM and Koka toolchains. See [docs/BAZEL.md](docs/BAZEL.md) for d
 | e5 | ℤ, 𝔹, [T], {…}, () → T, unit | + records, unit literal |
 | e6 | ℤ, 𝔹, [T], {…}, () → T, unit | + static typing, type definitions |
 
-Each level is a strict superset of the previous.
+Each level is almost a strict superset of the previous — the deliberate deviations (e.g. `break_ifz` dropped at e2+) are documented in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Examples
 

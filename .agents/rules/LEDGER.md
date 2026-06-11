@@ -35,15 +35,25 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Open questions
 
-- e3peg evaluates booleans as 0 in arithmetic contexts instead of raising
-  an error: `(3 < 5) + 1` is 2 at e2 but 0 at e3peg (silent default in
-  semantic actions). Found by efuzz Phase 2. Intended or interpreter bug?
+- Unbound variables silently evaluate to 0 (env-get default, all levels)
+  although E1_SPEC says referencing an undeclared variable is an error.
+  Kept unchanged for now (user decision 2026-06-11); discuss pros/cons.
 
 ## Now
 
 (No active task)
 
 ## Done (prune when exceeding 20 items)
+
+- Runtime type errors in e3peg/e4peg (decision 2026-06-11): ill-typed ops
+  (bool in arithmetic, ! on int, applying non-closure, mixed ==) print
+  "Type error: ..." and halt, replacing silent VInt(0)/VBool(False)
+  defaults. Bool == bool now works (was swallowed). Case-guard truthiness
+  kept (e2 idiom). Implemented via type-error ctl effect + exec-safe
+  returning maybe<env>. Negative tests in e3/e4 test scripts.
+- Fix e4 grammar: (e) was a 1-element array, making grouping inexpressible
+  (exposed by the type-error change: "(2 + 3) * 4" was garbage). Array
+  literals now require a ";": (a) is grouping, (a;) an array.
 
 - efuzz Phase 2 (docs/FUZZING.md): e2 differential fuzzing
   - efuzz [seed] [size] 2: case stmts (guard arms), * / % (Euclidean,

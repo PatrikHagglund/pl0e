@@ -52,11 +52,13 @@ apply_tail      = _ "." _ idx:int_lit_raw { DotIndex($idx) }
 
 atom_raw        = int_lit_raw / bool_lit_raw / paren_expr / id:ident_raw { Var($id) } / block
 
-// Parenthesized: array literal, unit, or grouped expression
+// Parenthesized: array literal, unit, or grouped expression.
+// An array needs at least one ";": "(a)" is grouping, "(a;)" a 1-element array.
 paren_expr      = "(" _ ")" _ { Unit }
                 / "(" _ array_items ")" _ { Array }
                 / "(" _ e:expression ")" _ { $e }
-array_items     = expression (";" _ expression)* ";"? _
+array_items     = expression (";" _ expression)+ ";"? _
+                / expression ";" _
 
 int_lit_raw     = digit+ { Int($0) }
 int_lit         = digit+ _ { Int($0) }

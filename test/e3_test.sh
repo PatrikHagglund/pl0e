@@ -72,6 +72,35 @@ check "closure" "$E3 $TMP" "6"
 echo -e 'add := \\x -> \\y -> x + y\nprint add 3 4' > "$TMP"
 check "closure_curry" "$E3 $TMP" "7"
 
+# Type errors: ill-typed operations halt with a message (no silent defaults)
+check_type_error() {
+    name="$1"
+    code="$2"
+    expected_err="$3"
+    echo -e "$code" > "$TMP"
+    out=$(timeout $TIMEOUT "$E3" "$TMP" 2>&1)
+    if echo "$out" | grep -qF "$expected_err"; then
+        echo "PASS $name"
+        pass=$((pass+1))
+    else
+        echo "FAIL $name"
+        printf "  expected error: %s\n" "$expected_err"
+        printf "  actual output: %s\n" "$(echo "$out" | tail -2 | tr '\n' ' ')"
+        fail=$((fail+1))
+    fi
+}
+
+check_type_error "bool_in_arith" 'print (3 < 5) + 1' "Type error: '+' on bool and int"
+check_type_error "not_on_int" 'print !3' "Type error: '!' on int"
+check_type_error "neg_on_bool" 'print -true' "Type error: unary '-' on bool"
+check_type_error "apply_non_closure" 'x := 5\nprint x 3' "Type error: applying a non-closure (int)"
+
+echo 'print (1 < 2) == (3 < 4)' > "$TMP"
+check "bool_equality" "$E3 $TMP" "true"
+
+echo -e 'x := (3 < 5) + 1\nprint 99' > "$TMP"
+check "type_error_halts" "$E3 $TMP" ""
+
 rm -f "$TMP"
 
 echo ""

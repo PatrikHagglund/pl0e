@@ -109,7 +109,22 @@ fun rval-eq(a: rval, b: rval): bool
 effect loop-break
   ctl do-break(e: e4env): a
 
-fun eval(ex: expr, e: e4env): <div> rval
+// Ill-typed operations are runtime type errors, not silent defaults
+// (decision 2026-06-11, found by efuzz; see docs/FUZZING.md findings).
+// Exceptions kept as-is: case guards accept truthy ints (e2 idiom),
+// array indexing out of bounds and EIndex on non-arrays still default to 0
+// (separate open question, like unbound variables).
+effect type-error
+  ctl do-type-error(msg: string): a
+
+fun kind(v: rval): string
+  match v
+    VInt(_) -> "int"
+    VBool(_) -> "bool"
+    VArray(_) -> "array"
+    VClosure(_, _, _) -> "closure"
+
+fun eval(ex: expr, e: e4env): <div,type-error> rval
   match ex
     EVal(v) -> v
     EVar(s) -> env-get(e, s)
@@ -129,19 +144,21 @@ fun eval(ex: expr, e: e4env): <div> rval
         ("%", VInt(a), VInt(b)) -> VInt(if b == 0 then 0 else a % b)
         ("==", VInt(a), VInt(b)) -> VBool(a == b)
         ("!=", VInt(a), VInt(b)) -> VBool(a != b)
+        ("==", VBool(a), VBool(b)) -> VBool(a == b)
+        ("!=", VBool(a), VBool(b)) -> VBool(a != b)
         ("<", VInt(a), VInt(b)) -> VBool(a < b)
         (">", VInt(a), VInt(b)) -> VBool(a > b)
         ("<=", VInt(a), VInt(b)) -> VBool(a <= b)
         (">=", VInt(a), VInt(b)) -> VBool(a >= b)
         ("&&", VBool(a), VBool(b)) -> VBool(a && b)
         ("||", VBool(a), VBool(b)) -> VBool(a || b)
-        _ -> VInt(0)
+        _ -> do-type-error("'" ++ op ++ "' on " ++ kind(lv) ++ " and " ++ kind(rv))
     ENot(inner) -> match eval(inner, e)
       VBool(b) -> VBool(!b)
-      _ -> VBool(False)
+      v -> do-type-error("'!' on " ++ kind(v))
     ENeg(inner) -> match eval(inner, e)
       VInt(n) -> VInt(0 - n)
-      _ -> VInt(0)
+      v -> do-type-error("unary '-' on " ++ kind(v))
     EApply(f, a) ->
       val fv = eval(f, e)
       val av = eval(a, e)
@@ -154,13 +171,13 @@ fun eval(ex: expr, e: e4env): <div> rval
               if rest.is-nil then eval(body, newenv)
               else VClosure(rest, body, newenv)
             Nil -> eval(body, cenv)
-        _ -> VInt(0)
+        _ -> do-type-error("applying " ++ kind(fv) ++ " to " ++ kind(av))
     ECase(scrut, arms) ->
       val sv = eval(scrut, e)
       eval-case-arms(sv, arms, e)
     EFunc(params, body) -> VClosure(params, body, e)
 
-fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e4env): <div> rval
+fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e4env): <div,type-error> rval
   match arms
     Nil -> VInt(0)
     Cons((pat, body), rest) ->
@@ -168,7 +185,7 @@ fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e4env): <div> rv
         Just(binds) -> eval(body, env-extend(e, binds))
         Nothing -> eval-case-arms(scrut, rest, e)
 
-fun exec(s: stmt, e: e4env): <div,console,loop-break> e4env
+fun exec(s: stmt, e: e4env): <div,console,loop-break,type-error> e4env
   match s
     SExpr(_) -> e
     SAssign(id, ex) -> env-set(e, id, eval(ex, e))
@@ -178,7 +195,7 @@ fun exec(s: stmt, e: e4env): <div,console,loop-break> e4env
       e
     SLoop(body) ->
       with ctl do-break(e1) e1
-      fun go(env: e4env): <div,console,loop-break> e4env
+      fun go(env: e4env): <div,console,loop-break,type-error> e4env
         go(exec(body, env))
       go(e)
     SBreak -> do-break(e)
@@ -187,7 +204,7 @@ fun exec(s: stmt, e: e4env): <div,console,loop-break> e4env
       val sv = eval(scrut, e)
       exec-case-arms(sv, arms, e)
 
-fun exec-case-arms(scrut: rval, arms: list<(pattern, stmt)>, e: e4env): <div,console,loop-break> e4env
+fun exec-case-arms(scrut: rval, arms: list<(pattern, stmt)>, e: e4env): <div,console,loop-break,type-error> e4env
   match arms
     Nil -> e
     Cons((pat, body), rest) ->
@@ -352,14 +369,18 @@ fun e4-action(name: string, txt: string, children: list<semval>, caps: captures<
     Cons(c, Nil) -> c
     _ -> SVList(cs)
 
-fun exec-safe(sv: semval, e: e4env): <div,console> e4env
+// Returns Nothing on a type error: the program halts.
+fun exec-safe(sv: semval, e: e4env): <div,console> maybe<e4env>
+  with ctl do-type-error(msg)
+    println("Type error: " ++ msg)
+    Nothing
   with ctl do-break(e1)
     println("Error: 'break' used outside of loop")
-    e1
+    Just(e1)
   match sv
-    SVStmt(s) -> exec(s, e)
-    SVList(Cons(SVStmt(s), _)) -> exec(s, e)
-    _ -> e
+    SVStmt(s) -> Just(exec(s, e))
+    SVList(Cons(SVStmt(s), _)) -> Just(exec(s, e))
+    _ -> Just(e)
 
 fun parse-flags(args: list<string>): div (bool, bool, bool, list<string>)
   match args
@@ -415,10 +436,14 @@ pub fun main()
     while { !input.is-empty }
       match peg-exec-partial(g, [], e4-action, "statement", input)
         (_, Just((rest, sv))) ->
-          current-env := exec-safe(sv, current-env)
-          match peg-exec-partial(g, [], e4-action, "_", rest)
-            (_, Just((rest2, _))) -> input := rest2
-            _ -> input := rest
+          match exec-safe(sv, current-env)
+            Just(e2) ->
+              current-env := e2
+              match peg-exec-partial(g, [], e4-action, "_", rest)
+                (_, Just((rest2, _))) -> input := rest2
+                _ -> input := rest
+            Nothing ->  // type error: halt
+              input := "".slice
         _ ->
           if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
           input := "".slice

@@ -61,7 +61,20 @@ fun env-set(e: e3env, key: string, v: rval): e3env
 effect loop-break
   ctl do-break(e: e3env): a
 
-fun eval(ex: expr, e: e3env): <div> rval
+// Ill-typed operations are runtime type errors, not silent defaults
+// (decision 2026-06-11, found by efuzz; see docs/FUZZING.md findings).
+// Exception: case guards keep accepting both bools and truthy ints, since
+// the e2 default-arm idiom `1 -> { ... }` depends on it.
+effect type-error
+  ctl do-type-error(msg: string): a
+
+fun kind(v: rval): string
+  match v
+    VInt(_) -> "int"
+    VBool(_) -> "bool"
+    VClosure(_, _, _) -> "closure"
+
+fun eval(ex: expr, e: e3env): <div,type-error> rval
   match ex
     EVal(v) -> v
     EVar(s) -> env-get(e, s)
@@ -76,19 +89,21 @@ fun eval(ex: expr, e: e3env): <div> rval
         ("%", VInt(a), VInt(b)) -> VInt(if b == 0 then 0 else a % b)
         ("==", VInt(a), VInt(b)) -> VBool(a == b)
         ("!=", VInt(a), VInt(b)) -> VBool(a != b)
+        ("==", VBool(a), VBool(b)) -> VBool(a == b)
+        ("!=", VBool(a), VBool(b)) -> VBool(a != b)
         ("<", VInt(a), VInt(b)) -> VBool(a < b)
         (">", VInt(a), VInt(b)) -> VBool(a > b)
         ("<=", VInt(a), VInt(b)) -> VBool(a <= b)
         (">=", VInt(a), VInt(b)) -> VBool(a >= b)
         ("&&", VBool(a), VBool(b)) -> VBool(a && b)
         ("||", VBool(a), VBool(b)) -> VBool(a || b)
-        _ -> VInt(0)
+        _ -> do-type-error("'" ++ op ++ "' on " ++ kind(lv) ++ " and " ++ kind(rv))
     ENot(inner) -> match eval(inner, e)
       VBool(b) -> VBool(!b)
-      _ -> VBool(False)
+      v -> do-type-error("'!' on " ++ kind(v))
     ENeg(inner) -> match eval(inner, e)
       VInt(n) -> VInt(0 - n)
-      _ -> VInt(0)
+      v -> do-type-error("unary '-' on " ++ kind(v))
     EApply(f, a) -> match eval(f, e)
       VClosure(params, body, cenv) ->
         val arg = eval(a, e)
@@ -98,7 +113,7 @@ fun eval(ex: expr, e: e3env): <div> rval
             if rest.is-nil then eval(body, newenv)
             else VClosure(rest, body, newenv)
           Nil -> eval(body, cenv)
-      _ -> VInt(0)
+      v -> do-type-error("applying a non-closure (" ++ kind(v) ++ ")")
     ECase(arms) ->
       match arms
         Cons((cond, body), rest) ->
@@ -109,7 +124,7 @@ fun eval(ex: expr, e: e3env): <div> rval
         Nil -> VInt(0)
     EFunc(params, body) -> VClosure(params, body, e)
 
-fun exec(s: stmt, e: e3env): <div,console,loop-break> e3env
+fun exec(s: stmt, e: e3env): <div,console,loop-break,type-error> e3env
   match s
     SExpr(_) -> e
     SAssign(id, ex) -> env-set(e, id, eval(ex, e))
@@ -122,7 +137,7 @@ fun exec(s: stmt, e: e3env): <div,console,loop-break> e3env
       e
     SLoop(body) ->
       with ctl do-break(e1) e1
-      fun go(env: e3env): <div,console,loop-break> e3env
+      fun go(env: e3env): <div,console,loop-break,type-error> e3env
         go(exec(body, env))
       go(e)
     SBreak -> do-break(e)
@@ -258,14 +273,18 @@ fun ident-str(v: semval): string
     SVIdent(s) -> s.list.take-while(fn(c) c.is-alpha || c.is-digit || c == '_').string
     _ -> ""
 
-fun exec-safe(sv: semval, e: e3env): <div,console> e3env
+// Returns Nothing on a type error: the program halts.
+fun exec-safe(sv: semval, e: e3env): <div,console> maybe<e3env>
+  with ctl do-type-error(msg)
+    println("Type error: " ++ msg)
+    Nothing
   with ctl do-break(e1)
     println("Error: 'break' used outside of loop")
-    e1
+    Just(e1)
   match sv
-    SVStmt(s) -> exec(s, e)
-    SVList(Cons(SVStmt(s), _)) -> exec(s, e)
-    _ -> e
+    SVStmt(s) -> Just(exec(s, e))
+    SVList(Cons(SVStmt(s), _)) -> Just(exec(s, e))
+    _ -> Just(e)
 
 fun parse-flags(args: list<string>): div (bool, bool, bool, list<string>)
   match args
@@ -321,10 +340,14 @@ pub fun main()
     while { !input.is-empty }
       match peg-exec-partial(g, [], e3-action, "statement", input)
         (_, Just((rest, sv))) ->
-          current-env := exec-safe(sv, current-env)
-          match peg-exec-partial(g, [], e3-action, "_", rest)
-            (_, Just((rest2, _))) -> input := rest2
-            _ -> input := rest
+          match exec-safe(sv, current-env)
+            Just(e2) ->
+              current-env := e2
+              match peg-exec-partial(g, [], e3-action, "_", rest)
+                (_, Just((rest2, _))) -> input := rest2
+                _ -> input := rest
+            Nothing ->  // type error: halt
+              input := "".slice
         _ ->
           if !input.is-empty then println("Parse failed at: " ++ input.string.first(20).string ++ "...")
           input := "".slice

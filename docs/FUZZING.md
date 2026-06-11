@@ -45,10 +45,19 @@ generator's prediction. Failing programs and outputs are saved to
   guards agree. The generator therefore emits comparisons only in guard
   position; now documented in DESIGN.md "Superset deviations".
 
-- **e3peg evaluates booleans as 0 in arithmetic** instead of raising an
-  error: `(3 < 5) + 1` is `2` at e2 but `0` at e3peg. Possibly an
-  interpreter bug (silent default in the semantic actions) — recorded as an
-  open question in the ledger.
+- **e3peg evaluated booleans as 0 in arithmetic** instead of raising an
+  error: `(3 < 5) + 1` was `2` at e2 but `0` at e3peg. Resolved (decision
+  2026-06-11): ill-typed operations in e3peg/e4peg are now runtime type
+  errors ("Type error: '+' on bool and int") that halt the program. Bool
+  equality (`==`/`!=` on two bools), previously swallowed by the same
+  catch-all, now works. Case guards still accept truthy ints (e2 idiom).
+  Unbound variables still silently evaluate to 0 — separate open question.
+
+- **e4 had no expression grouping**: `(e)` parsed as a 1-element array, so
+  `print (2 + 3) * 4` computed garbage (silently, pre-type-errors). Exposed
+  immediately by the type-error change. Fixed in e4.peg: an array literal
+  now requires at least one `;` (`(a)` is grouping, `(a;)` a 1-element
+  array), matching the grammar's own comment.
 
 ## Background
 

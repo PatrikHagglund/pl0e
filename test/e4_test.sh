@@ -102,6 +102,27 @@ check "closure_curry" "$E4 $TMP" "7"
 # Example file
 check "example_e4" "$E4 $EXAMPLES/example.e4" "10"
 
+# Parenthesized expressions are grouping, not 1-element arrays
+echo 'print (2 + 3) * 4' > "$TMP"
+check "paren_grouping" "$E4 $TMP" "20"
+
+echo 'print (7;)' > "$TMP"
+check "one_elem_array" "$E4 $TMP" "(7;)"
+
+# Type errors: ill-typed operations halt with a message (no silent defaults)
+echo -e 'arr := (1; 2;)\nprint arr + 1' > "$TMP"
+out=$(timeout $TIMEOUT "$E4" "$TMP" 2>&1)
+if echo "$out" | grep -qF "Type error: '+' on array and int"; then
+    echo "PASS array_in_arith"
+    pass=$((pass+1))
+else
+    echo "FAIL array_in_arith"
+    fail=$((fail+1))
+fi
+
+echo -e 'x := (3 < 5) + 1\nprint 99' > "$TMP"
+check "type_error_halts" "$E4 $TMP" ""
+
 rm -f "$TMP"
 
 echo ""

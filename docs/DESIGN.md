@@ -27,11 +27,13 @@ Consequences:
 - e1 programs that use loops do not parse at level 2+ (e.g. `examples/factorial.e1`).
 - e2 → e3 is a *syntactic* superset (all e2 examples parse and run on e3peg)
   but not a *semantic* one: an e2 program that uses a comparison result as an
-  integer (`x := (a < b)`, `print (a < b)`, arithmetic on it) prints or
-  computes different values at e3. Comparisons used only as `case` guards
-  behave identically. (Note: e3peg currently evaluates booleans as 0 in
-  arithmetic contexts rather than erroring — silently, see open question in
-  the ledger.)
+  integer (`x := (a < b)`, `print (a < b)`, arithmetic on it) behaves
+  differently at e3. Comparisons used only as `case` guards behave
+  identically. At e3/e4, ill-typed operations (bool in arithmetic, `!` on an
+  int, applying a non-closure, mixed-type `==`) are runtime type errors: the
+  interpreter prints `Type error: ...` and halts. Case guards are the
+  deliberate exception — they accept both bools and truthy ints, since the
+  e2 default-arm idiom `1 -> { ... }` depends on it.
 - e2/e3 programs that use `case` do not parse at level 4.
 
 ### Level Rationale

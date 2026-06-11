@@ -9,7 +9,9 @@ Explore simple language design/implementation inspired by PL/0.
 - Keep languages small
 - Progressive complexity (e0–e6), each level *almost* a strict superset of
   the previous. Deliberate deviations (DESIGN.md "Superset deviations"):
-  break_ifz dropped at e2+ (too ugly above e1); e4 case requires a scrutinee
+  break_ifz dropped at e2+ (too ugly above e1); e3 comparisons yield
+  true/false not 1/0 (semantic, not syntactic, break); e4 case requires a
+  scrutinee
 - Multiple implementation approaches (Koka interpreters, C++ interpreter/compiler)
 
 ## Next
@@ -21,9 +23,9 @@ Explore simple language design/implementation inspired by PL/0.
 - Explore efficient interpreters (Graal/Truffle, simple JIT)
 - Standard library?
 - Symbolic expressions (computer algebra)?
-- efuzz Phases 2-4 (docs/FUZZING.md): e2 constructs, e3/e4, mutator/reducer,
-  CI integration. Per-level diff matrices: e2 programs run on e2peg+e3peg;
-  e3 only on e3peg; e4 only on e4peg (superset deviations, DESIGN.md)
+- efuzz Phases 3-4 (docs/FUZZING.md): e3/e4 generators (e3 only on e3peg;
+  e4 only on e4peg — superset deviations, DESIGN.md), mutator/reducer,
+  CI integration
 - Explore using Zig/Koru, and Ocaml as implementation langagues.
 - Explore Rascal and/or K Framework for specifications.
 - Explore adding support for syntactic sugar (using rewrite rules in the PEG
@@ -33,13 +35,26 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Open questions
 
-(none)
+- e3peg evaluates booleans as 0 in arithmetic contexts instead of raising
+  an error: `(3 < 5) + 1` is 2 at e2 but 0 at e3peg (silent default in
+  semantic actions). Found by efuzz Phase 2. Intended or interpreter bug?
 
 ## Now
 
 (No active task)
 
 ## Done (prune when exceeding 20 items)
+
+- efuzz Phase 2 (docs/FUZZING.md): e2 differential fuzzing
+  - efuzz [seed] [size] 2: case stmts (guard arms), * / % (Euclidean,
+    /0 = %0 = 0 per pegeval), comparisons in guard position only,
+    early-break loop arms, magnitude-guarded regeneration (cap 10^60)
+  - fuzz/e2_diff.sh: //fuzz:diff_e2 diffs e2peg+e3peg vs expected;
+    //fuzz:efuzz_e2_smoke sh_test
+  - 350 e2 seeds + 100 e1 regression seeds: 0 mismatches
+  - Found: e2→e3 syntactic-but-not-semantic superset (cmp → 1/0 vs
+    true/false; added to DESIGN.md deviations); e3peg bool-in-arithmetic
+    silently 0 (open question)
 
 - Resolve superset question: claim revised to "almost a strict superset"
   (user decision 2026-06-11). break_ifz stays out of e2+ ("effective at e1,

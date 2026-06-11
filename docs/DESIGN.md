@@ -20,12 +20,19 @@ differential-fuzzing work, see [FUZZING.md](FUZZING.md)):
 | Levels | Deviation | Rationale |
 |--------|-----------|-----------|
 | e1 → e2 | `break_ifz` dropped | Effective as e1's minimal conditional primitive (Minsky machine), but too ugly once `case` + `break` exist |
+| e2 → e3 | Comparisons yield `true`/`false` instead of `1`/`0` | e3 introduces a proper boolean type; comparison results stop being integers |
 | e3 → e4 | `case` requires a scrutinee | e4's pattern matching needs `case expr { pattern -> ... }`; the guard form `case { cond -> ... }` no longer parses |
 
 Consequences:
 - e1 programs that use loops do not parse at level 2+ (e.g. `examples/factorial.e1`).
+- e2 → e3 is a *syntactic* superset (all e2 examples parse and run on e3peg)
+  but not a *semantic* one: an e2 program that uses a comparison result as an
+  integer (`x := (a < b)`, `print (a < b)`, arithmetic on it) prints or
+  computes different values at e3. Comparisons used only as `case` guards
+  behave identically. (Note: e3peg currently evaluates booleans as 0 in
+  arithmetic contexts rather than erroring — silently, see open question in
+  the ledger.)
 - e2/e3 programs that use `case` do not parse at level 4.
-- e2 → e3 is (so far) a true superset: all e2 examples run unchanged on e3peg.
 
 ### Level Rationale
 

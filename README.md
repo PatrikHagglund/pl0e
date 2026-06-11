@@ -10,7 +10,7 @@ Currently in an initial work-in-progress state.
 - Benchmarks for levels 1, 2, and 3
 - e5 and e6 have PEG grammars and example files, but no interpreters yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
-- `efuzz`: differential fuzzer for e1 — generates random well-defined programs with known output and diffs all implementations (see [docs/FUZZING.md](docs/FUZZING.md))
+- `efuzz`: differential fuzzer for e1 and e2 — generates random well-defined programs with known output and diffs implementations (see [docs/FUZZING.md](docs/FUZZING.md))
 
 **Philosophy:**
 - Keep languages small
@@ -31,6 +31,7 @@ bazel run //examples:factorial_llvm              # LLVM backend
 bazel test //test:all                            # Run tests
 bazel run //bench:bench                          # Run benchmarks
 bazel run //fuzz:diff -- -- 100 1 30             # Differential fuzzing (e1)
+bazel run //fuzz:diff_e2 -- -- 100 1 30          # Differential fuzzing (e2: e2peg vs e3peg)
 ```
 
 Uses hermetic LLVM and Koka toolchains. See [docs/BAZEL.md](docs/BAZEL.md) for details.
@@ -105,7 +106,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 - [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification, static analysis (`--warn` flag)
-- [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (Phase 1: e1)
+- [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (Phases 1-2: e1, e2)
 - [docs/minimal_turing_languages.md](docs/minimal_turing_languages.md) — Survey of minimal Turing-complete languages (Minsky machines, λ-calculus, etc.)
 - [examples/](examples/) — All example programs for each language level
 

@@ -5,10 +5,11 @@ Status: Phase 1 implemented (e1 generator + diff driver). Phases 2-4 planned.
 ## Usage
 
 ```bash
-bazel run //fuzz:diff                        # 20 seeds, size 20
-bazel run //fuzz:diff -- -- 100 1 40        # 100 seeds starting at 1, size 40
-bazel test //fuzz:efuzz_smoke               # quick CI check (10 seeds)
-bazel run //src:efuzz -- 42 20              # print one generated program
+bazel run //fuzz:diff                        # e1: 20 seeds, size 20
+bazel run //fuzz:diff -- -- 100 1 40        # e1: 100 seeds starting at 1, size 40
+bazel run //fuzz:diff_e2 -- -- 100 1 30     # e2: e2peg vs e3peg vs expected
+bazel test //fuzz:efuzz_smoke //fuzz:efuzz_e2_smoke   # quick CI checks
+bazel run //src:efuzz -- 42 20 2            # print one generated program (level 2)
 ```
 
 `//src:efuzz` prints a random well-defined e1 program with its expected
@@ -36,6 +37,18 @@ generator's prediction. Failing programs and outputs are saved to
   the diff matrix: e1 programs run only on e1 implementations; Phase 2 e2
   programs can additionally run on e3peg (e2 → e3 holds: all e2 examples
   run unchanged) but not on e4peg.
+
+- **e2 → e3 is a syntactic but not semantic superset** (found by Phase 2,
+  17/20 first-run seeds diverged). Comparisons yield `1`/`0` at e2 but
+  `true`/`false` at e3, so `print (a < b)` or arithmetic on a comparison
+  result differs across the two levels. Comparisons used purely as `case`
+  guards agree. The generator therefore emits comparisons only in guard
+  position; now documented in DESIGN.md "Superset deviations".
+
+- **e3peg evaluates booleans as 0 in arithmetic** instead of raising an
+  error: `(3 < 5) + 1` is `2` at e2 but `0` at e3peg. Possibly an
+  interpreter bug (silent default in the semantic actions) — recorded as an
+  open question in the ledger.
 
 ## Background
 
@@ -142,8 +155,13 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    expressions. Smoke target in `bazel test` (10 seeds); large runs via
    `bazel run //fuzz:diff`. Cross-level diffing blocked on the superset
    finding above.
-2. **Phase 2 — e2 constructs.** `case`, comparisons, `*` `/` `%` (safe
-   divisors), blocks, `break`.
+2. **Phase 2 — e2 constructs.** ✅ Done (`efuzz [seed] [size] 2`,
+   `bazel run //fuzz:diff_e2`). `case` statements (guard arms), `*` `/` `%`
+   (de-facto semantics: Euclidean, `/0` = `%0` = 0), comparisons in guard
+   position only (see findings), data-dependent early-break loop arms, and
+   magnitude-guarded regeneration (values capped at 10^60 since
+   multiplication inside loops can explode). Diffs e2peg and e3peg against
+   the co-evaluated expected output.
 3. **Phase 3 — e3/e4.** Booleans, callables/closures (bounded depth),
    case expressions; arrays (in-bounds), pattern matching.
 4. **Phase 4 — hardening.** Mutator (semantics-preserving transforms:

@@ -50,3 +50,39 @@ sh_test(
     data = _DIFF_DATA,
     timeout = "moderate",
 )
+
+# Differential fuzzing for e2 (e2peg vs e3peg vs expected):
+#   bazel run //fuzz:diff_e2 -- <count> <start-seed> <size>
+_DIFF_E2_ARGS = [
+    "$(location //src:efuzz)",
+    "$(location //src:e2peg)",
+    "$(location //src:e3peg)",
+]
+
+_DIFF_E2_DATA = [
+    "//src:efuzz",
+    "//src:e2peg",
+    "//src:e3peg",
+    "//src:e2.peg",
+    "//src:e3.peg",
+]
+
+sh_binary(
+    name = "diff_e2",
+    srcs = ["e2_diff.sh"],
+    args = _DIFF_E2_ARGS,
+    data = _DIFF_E2_DATA,
+)
+
+sh_test(
+    name = "efuzz_e2_smoke",
+    srcs = ["e2_diff.sh"],
+    args = _DIFF_E2_ARGS + [
+        "--",
+        "10",
+        "1",
+        "15",
+    ],
+    data = _DIFF_E2_DATA,
+    timeout = "moderate",
+)

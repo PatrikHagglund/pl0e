@@ -4,17 +4,25 @@
 // --- e6 new: static typing ---
 type Point = {x: int, y: int}
 origin : Point = {x: 0, y: 0}
-id_int : (int) -> int = (x: int) -> x
+id_int : (int) -> int = \x: int -> x
+print id_int (origin.x)   // 0
 
-// "Semiring" dictionary for int
+// "Semiring" dictionary for int (curried function fields, e3-style)
 type Semiring = {zero: int, add: (int, int) -> int, mul: (int, int) -> int}
 
 int_semiring : Semiring =
-  {zero: 0, add: (a: int, b: int) -> a + b, mul: (a: int, b: int) -> a * b}
+  {zero: 0, add: \a: int, b: int -> a + b, mul: \a: int, b: int -> a * b}
 
 // Generic sum-of-products over a fixed triple (a,b,c) using a dictionary
 sum_prod : (Semiring, int, int, int) -> int =
-  (s: Semiring, a: int, b: int, c: int) ->
-    s.add (s.mul (a, b), s.mul (b, c))
+  \s: Semiring, a: int, b: int, c: int ->
+    s.add (s.mul (a) (b)) (s.mul (b) (c))
 
-result : int = sum_prod (int_semiring, 2, 3, 4)  // 6 + 12 = 18
+result : int = sum_prod (int_semiring) (2) (3) (4)
+print result              // 6 + 12 = 18
+
+// Static typing catches mistakes before execution, e.g. all of these
+// would be "Static error"s:
+//   bad : int = true
+//   print origin.z
+//   sum_prod (origin) (1) (2) (3)

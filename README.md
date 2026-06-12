@@ -8,9 +8,8 @@ This project explores the design and implementation of simple programming langua
 
 Currently in an initial work-in-progress state.
 - e1 has a [language specification](docs/E1_SPEC.md), two [Koka](https://koka-lang.github.io/) interpreters (AST-based and [PEG](https://en.wikipedia.org/wiki/Parsing_expression_grammar) with actions), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
-- e0, e2, e3, e4, and e5 have PEG interpreters in Koka; e3 has a [language specification](docs/E3_SPEC.md)
+- e0 and e2-e6 have PEG interpreters in Koka; e3 has a [language specification](docs/E3_SPEC.md); e6 adds static type checking
 - Benchmarks for levels 1, 2, and 3
-- e6 has a PEG grammar and example files, but no interpreter yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
 - `efuzz`: differential fuzzer for e1-e4 — generates random well-defined programs with known output and diffs implementations against a co-evaluated oracle, including violation checking (see [docs/FUZZING.md](docs/FUZZING.md))
 
@@ -80,6 +79,7 @@ Each level is almost a strict superset of the previous — the deliberate deviat
 | Koka (PEG, e3) | `peg.koka`, `e3peg.koka` | e3 with booleans/closures |
 | Koka (PEG, e4) | `peg.koka`, `e4peg.koka` | e4 with arrays/pattern matching |
 | Koka (PEG, e5) | `peg.koka`, `e5peg.koka` | e5 with records/unit/field access |
+| Koka (PEG, e6) | `peg.koka`, `e6peg.koka` | e6 with static type checking before execution |
 | C++ interpreter | `e1.cpp`, `e1.hpp` | Handwritten, AST used |
 | Compiler in C++ | `e1_compile.cpp`, `e1.hpp` | C++ or LLVM IR backend |
 
@@ -110,8 +110,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 - [docs/E1_SPEC.md](docs/E1_SPEC.md), [docs/E3_SPEC.md](docs/E3_SPEC.md) — Language specifications (e1: minimal; e3: introduces behavior categories)
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification, static analysis (`--warn` flag)
-- [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (Phases 1-2: e1, e2)
+- [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (levels e1-e4)
 - [docs/minimal_turing_languages.md](docs/minimal_turing_languages.md) — Survey of minimal Turing-complete languages (Minsky machines, λ-calculus, etc.)
 - [examples/](examples/) — All example programs for each language level
-
 

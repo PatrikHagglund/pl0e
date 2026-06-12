@@ -77,3 +77,18 @@ sh_test(
     ],
     timeout = "short",
 )
+
+sh_test(
+    name = "e6_test",
+    srcs = ["e6_test.sh"],
+    args = [
+        "$(location //src:e6peg)",
+        "examples",
+    ],
+    data = [
+        "//src:e6peg",
+        "//src:e6.peg",
+        "//examples:e6_examples",
+    ],
+    timeout = "short",
+)

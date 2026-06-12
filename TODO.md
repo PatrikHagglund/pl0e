@@ -2,9 +2,13 @@
 
 ## Next
 
-- Implement e6peg interpreter (static typing). New efuzz oracle:
-  well-typed-by-construction programs must type-check; ill-typed mutants
-  must be rejected
+- efuzz e6 oracle: well-typed-by-construction programs must pass e6peg's
+  static checker; ill-typed mutants must be rejected with "Static error"
+- e6 design notes to revisit: no recursive types (so the Y combinator does
+  not type-check — recursion is loops-only at e6); record types are
+  invariant (no width subtyping in expressions, though record *patterns*
+  still match extra fields); checker scoping is conservative (variables
+  first bound inside loop/case/block bodies are not visible afterwards)
 - e5 deferred design questions (from the pre-implementation e5.peg draft,
   saved decisions for later): tuples `(a, b)`, optional case scrutinee,
   block-as-expression (trailing expression value), lvalue assignment paths

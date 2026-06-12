@@ -77,15 +77,14 @@ case_expr       = "case" _ "{" _ expr_arm+ "}" _
 expr_arm        = or_expr "->" _ or_expr ","? _
 
 or_expr         = and_expr ("||" _ and_expr)*
-and_expr        = not_expr ("&&" _ not_expr)*
-not_expr        = "!" _ cmp_expr / cmp_expr
+and_expr        = cmp_expr ("&&" _ cmp_expr)*
 
 cmp_expr        = sum_expr (relop sum_expr)?
 relop           = ("==" / "!=" / "<=" / ">=" / "<" / ">") _
 
 sum_expr        = product (("+" / "-") _ product)*
 product         = unary (("*" / "/" / "%") _ unary)*
-unary           = "-" _ apply_expr / apply_expr
+unary           = "-" _ apply_expr / "!" _ apply_expr / apply_expr
 
 apply_expr      = atom (__ atom)*
 atom            = int_lit / bool_lit / "(" _ expression ")" _ / ident / block
@@ -108,9 +107,11 @@ comment         = "//" [^\n]* / "/*" (!"*/" .)* "*/"
 
 Grammar notes:
 - Comparisons are non-associative (`a < b < c` is invalid; parenthesize).
-- `!` binds *looser* than comparisons: `!a == b` parses as `!(a == b)`,
-  and a negated comparison operand must be parenthesized — `a == !b` is
-  invalid, write `a == (!b)`. (Found by differential fuzzing.)
+- `!` is a tight-binding unary prefix, like unary `-` (C-family
+  precedence): `!a == b` parses as `(!a) == b`, and `a == !b` is valid.
+  To negate a whole comparison, parenthesize: `!(a == b)`. (An earlier
+  grammar put `!` looser than comparisons, which differential fuzzing
+  flagged as a usability trap — `a != !b` did not parse.)
 
 ## Types
 

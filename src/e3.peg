@@ -21,10 +21,8 @@ expr_arm        = cond:or_expr "->" _ val:or_expr ","? _ { ExprArm($cond, $val) 
 // Refactored to avoid backtracking: use left-factored rules
 or_expr         = and_expr or_tail*
 or_tail         = "||" _ and_expr { Or }
-and_expr        = not_expr and_tail*
-and_tail        = "&&" _ not_expr { And }
-not_expr        = "!" _ e:cmp_expr { Not($e) }
-                / cmp_expr
+and_expr        = cmp_expr and_tail*
+and_tail        = "&&" _ cmp_expr { And }
 
 cmp_expr        = sum_expr cmp_tail?
 cmp_tail        = "==" _ r:sum_expr { Eq }
@@ -42,6 +40,7 @@ product_tail    = "*" _ unary { Mul }
                 / "/" _ unary { Div }
                 / "%" _ unary { Mod }
 unary           = "-" _ e:apply_expr { Neg($e) }
+                / "!" _ e:apply_expr { Not($e) }
                 / apply_expr
 
 // Note: atom_raw doesn't consume trailing whitespace, apply_expr handles it

@@ -1,0 +1,77 @@
+// efuzz seed=9005 size=18 level=4
+// violations: div0
+acc := 0
+d0:
+case acc {
+  0 -> { }
+  false -> { }
+  _ -> {
+    b1 := ((25 % 62) > (81 + acc))
+  }
+}
+print acc
+a2 := (-acc;)
+print ((70 + 56) + acc)
+case a2 {
+  (m3; _) -> {
+    print ((a2 (((48 + 85) % 5))) / (acc * 17))
+  }
+  (m4;) -> {
+    v5 := m4
+  }
+  _ -> {
+    acc := (acc - ((39 * acc) * (acc + 57)))
+    d6:
+  }
+}
+a7 := ((53 + acc); (acc - 77);)
+d8:
+print (a7.1 - 30)
+acc := a7.1
+acc := (acc + acc)
+case a7 {
+  (m9; _) -> {
+    case acc {
+      0 -> { }
+      false -> { }
+      _ -> {
+        f10 := \p11 -> (a2.1 * 23)
+      }
+    }
+    case a7 {
+      (_; 71;) -> {
+        print ((62 / 27) * (90 - 89))
+      }
+      (m12; m13; 85;) -> {
+        print (93 * (m9 / 19))
+      }
+      _ -> {
+        b14 := (acc != a7.4)
+      }
+    }
+  }
+  m15 -> {
+    print ((23 + 87) < acc)
+    print acc
+  }
+  _ -> {
+    print acc
+    print !(70 != 6)
+  }
+}
+print ((acc * acc) + (24 + acc))
+f16 := \p17, p18 -> (25 + p18)
+print ((73 / acc) != acc)
+f19 := \p20 -> p20
+print acc
+d21:
+acc := (((81 / 53) + (acc + acc)) / (acc - (12 + acc)))
+print acc
+// expect: 0
+// expect: 126
+// expect: 0
+// expect: -107
+// expect: 23586
+// expect: true
+// expect: -154
+// expect: 26

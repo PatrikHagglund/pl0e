@@ -267,6 +267,14 @@ fun gen-program(seed: int, size: int, lvl: int): div list<fstmt>
 
 alias fenv = list<(string, int)>
 
+// Records whether the program triggers an erroneous construct (E3_SPEC.md)
+// during co-evaluation — currently only div0 is generatable. Emitted as a
+// "// violations:" marker so the diff driver can assert both directions of
+// the enforce-mode oracle: clean programs must not trip --enforce, and
+// div0 programs must halt with "Violation (div0)".
+effect viol-flag
+  fun mark-viol(): ()
+
 fun fget(e: fenv, key: string): int
   match e.filter(fn(p) p.fst == key)
     Cons((_, v), _) -> v
@@ -275,7 +283,7 @@ fun fget(e: fenv, key: string): int
 fun fset(e: fenv, key: string, v: int): fenv
   Cons((key, v), e.filter(fn(p) p.fst != key))
 
-fun feval(e: fenv, ex: fexpr): int
+fun feval(e: fenv, ex: fexpr): viol-flag int
   match ex
     FLit(n) -> n
     FVar(x) -> fget(e, x)
@@ -285,10 +293,16 @@ fun feval(e: fenv, ex: fexpr): int
     FMul(l, r) -> feval(e, l) * feval(e, r)
     FDiv(l, r) ->
       val rv = feval(e, r)
-      if rv == 0 then 0 else feval(e, l) / rv
+      if rv == 0 then
+        mark-viol()
+        0
+      else feval(e, l) / rv
     FMod(l, r) ->
       val rv = feval(e, r)
-      if rv == 0 then 0 else feval(e, l) % rv
+      if rv == 0 then
+        mark-viol()
+        0
+      else feval(e, l) % rv
     FCmp(op, l, r) ->
       val lv = feval(e, l)
       val rv = feval(e, r)
@@ -315,7 +329,7 @@ fun mag(m: int, v: int): int
 val mag-cap: int = 1000000000000000000000000000000000000000000000000000000000000
 
 // Returns (env, output lines in reverse order, max |value| seen)
-fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): div (fenv, list<string>, int)
+fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): <div,viol-flag> (fenv, list<string>, int)
   match s
     FDecl(_) -> (e, out, m)
     FAssign(x, ex) ->
@@ -330,7 +344,7 @@ fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): div (fenv, list<string>
       else (e, out, m)
     FCase(arms) -> fexec-case(e, arms, out, m)
 
-fun fexec-loop(e: fenv, c: string, early: maybe<fexpr>, body: list<fstmt>, out: list<string>, m: int): div (fenv, list<string>, int)
+fun fexec-loop(e: fenv, c: string, early: maybe<fexpr>, body: list<fstmt>, out: list<string>, m: int): <div,viol-flag> (fenv, list<string>, int)
   if fget(e, c) == 0 || m > mag-cap then (e, out, m)
   else
     val stop = match early
@@ -341,14 +355,14 @@ fun fexec-loop(e: fenv, c: string, early: maybe<fexpr>, body: list<fstmt>, out: 
       val (e2, out2, m2) = fexec-all(e, body, out, m)
       fexec-loop(fset(e2, c, fget(e2, c) - 1), c, early, body, out2, m2)
 
-fun fexec-case(e: fenv, arms: list<(fexpr, list<fstmt>)>, out: list<string>, m: int): div (fenv, list<string>, int)
+fun fexec-case(e: fenv, arms: list<(fexpr, list<fstmt>)>, out: list<string>, m: int): <div,viol-flag> (fenv, list<string>, int)
   match arms
     Nil -> (e, out, m)
     Cons((g, body), rest) ->
       if feval(e, g) != 0 then fexec-all(e, body, out, m)
       else fexec-case(e, rest, out, m)
 
-fun fexec-all(e: fenv, ss: list<fstmt>, out: list<string>, m: int): div (fenv, list<string>, int)
+fun fexec-all(e: fenv, ss: list<fstmt>, out: list<string>, m: int): <div,viol-flag> (fenv, list<string>, int)
   match ss
     Nil -> (e, out, m)
     Cons(s, rest) ->
@@ -357,9 +371,13 @@ fun fexec-all(e: fenv, ss: list<fstmt>, out: list<string>, m: int): div (fenv, l
       else fexec-all(e2, rest, out2, m2)
 
 // Returns (output lines, max |value| seen)
-fun run-program(prog: list<fstmt>): div (list<string>, int)
+// Returns (output lines, max |value|, violation occurred)
+fun run-program(prog: list<fstmt>): div (list<string>, int, bool)
+  var saw-viol := False
+  with fun mark-viol()
+    saw-viol := True
   val (_, out, m) = fexec-all([], prog, [], 0)
-  (out.reverse, m)
+  (out.reverse, m, saw-viol)
 
 // === Pretty-printer ===
 
@@ -440,10 +458,10 @@ fun show-fstmts(ss: list<fstmt>, ind: string, lvl: int): div list<string>
 // (multiplication inside loops); keeps interpreter runtimes sane.
 // An over-cap program has an aborted (wrong) co-evaluation, so it must
 // never be emitted: after 10 over-cap attempts, fail loudly instead.
-fun generate(seed: int, size: int, lvl: int, attempt: int): <div,exn> (list<fstmt>, list<string>)
+fun generate(seed: int, size: int, lvl: int, attempt: int): <div,exn> (list<fstmt>, list<string>, bool)
   val prog = gen-program(seed * 1000 + attempt * 137, size, lvl)
-  val (out, m) = run-program(prog)
-  if m <= mag-cap then (prog, out)
+  val (out, m, viol) = run-program(prog)
+  if m <= mag-cap then (prog, out, viol)
   elif attempt < 9 then generate(seed, size, lvl, attempt + 1)
   else throw("efuzz: magnitude cap exceeded on all attempts for seed " ++ seed.show)
 
@@ -459,7 +477,8 @@ pub fun main()
     Cons(_, Cons(_, Cons(s, _))) -> s.parse-int.default(1)
     _ -> 1
 
-  val (prog, expected) = generate(seed, size, lvl, 0)
+  val (prog, expected, viol) = generate(seed, size, lvl, 0)
   println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show)
+  println("// violations: " ++ (if viol then "div0" else "none"))
   show-fstmts(prog, "", lvl).foreach(println)
   expected.foreach(fn(line) println("// expect: " ++ line))

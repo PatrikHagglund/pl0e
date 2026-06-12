@@ -166,11 +166,21 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    finding above.
 2. **Phase 2 — e2 constructs.** ✅ Done (`efuzz [seed] [size] 2`,
    `bazel run //fuzz:diff_e2`). `case` statements (guard arms), `*` `/` `%`
-   (de-facto semantics: Euclidean, `/0` = `%0` = 0), comparisons in guard
-   position only (see findings), data-dependent early-break loop arms, and
-   magnitude-guarded regeneration (values capped at 10^60 since
-   multiplication inside loops can explode). Diffs e2peg and e3peg against
-   the co-evaluated expected output.
+   (Euclidean; `/0`/`%0` erroneous with fallback 0, per E3_SPEC.md),
+   comparisons in guard position only (see findings), data-dependent
+   early-break loop arms, and magnitude-guarded regeneration (values capped
+   at 10^60 since multiplication inside loops can explode; checked during
+   co-evaluation — repeated squaring would otherwise hang the generator).
+   Diffs e2peg and e3peg against the co-evaluated expected output.
+
+   **Enforce-mode oracle (bidirectional).** The co-evaluation records
+   whether an erroneous construct actually fires and emits it as a
+   `// violations: none|div0` marker. The driver then asserts both
+   directions against `e3peg --enforce`: a clean program must run without
+   tripping any violation (a spurious `Violation:` line is a checking-
+   machinery bug), and a div0-marked program must halt with
+   `Violation (div0)` (a missed violation is too). This tests the
+   violation checking itself, not just value agreement.
 3. **Phase 3 — e3/e4.** Booleans, callables/closures (bounded depth),
    case expressions; arrays (in-bounds), pattern matching.
 4. **Phase 4 — hardening.** Mutator (semantics-preserving transforms:

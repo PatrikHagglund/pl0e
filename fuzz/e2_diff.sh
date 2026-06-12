@@ -54,6 +54,24 @@ for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
         fi
     done
 
+    # Enforce-mode oracle (bidirectional): the generator's co-evaluation
+    # marks whether an erroneous construct fires (// violations: comment).
+    # Clean programs must run under --enforce without tripping a violation;
+    # div0 programs must make --enforce halt with "Violation (div0)".
+    viol=$(sed -n 's|^// violations: ||p' "$prog")
+    enforce_raw=$(timeout 10 "$E3PEG" --enforce "$prog" 2>/dev/null)
+    if [ "$viol" = "none" ]; then
+        if echo "$enforce_raw" | grep -q "^Violation"; then
+            mismatches="$mismatches e3peg-enforce(spurious-violation)"
+        elif [ "$(echo "$enforce_raw" | grep -E '^-?[0-9]+$')" != "$expected" ]; then
+            mismatches="$mismatches e3peg-enforce"
+        fi
+    else
+        if ! echo "$enforce_raw" | grep -q "^Violation (div0)"; then
+            mismatches="$mismatches e3peg-enforce(missed-violation)"
+        fi
+    fi
+
     if [ -z "$mismatches" ]; then
         pass=$((pass + 1))
     else

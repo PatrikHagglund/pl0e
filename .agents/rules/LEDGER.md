@@ -51,6 +51,10 @@ the 0-default and an enforcing implementation are both conforming)
 
 ## Done (prune when exceeding 20 items)
 
+- Enforce-mode oracle in //fuzz:diff_e2 (2026-06-12): efuzz co-evaluation
+  marks `// violations: none|div0`; driver asserts bidirectionally vs
+  `e3peg --enforce` (clean program must not trip a violation; div0 program
+  must halt with Violation (div0)). Tests the checking machinery itself.
 - Erroneous behavior + handling modes (2026-06-12): violation ctl effect
   in e3peg/e4peg with kinds div0/unbound/nomatch/oob and per-kind modes
   via --enforce / --erroneous=MODE / --erroneous:KIND=MODE. Default

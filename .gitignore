@@ -20,3 +20,6 @@ src/e1_rt_bigint.ll
 # Bazel
 bazel-*
 .bazel-cache
+
+# Stray empty file repeatedly created by something in the dev environment
+oom

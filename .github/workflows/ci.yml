@@ -26,9 +26,9 @@ jobs:
           path: |
             ~/.cache/bazel-disk
             ~/.cache/bazel-repo
-          # TEMPORARY (parallelism OOM experiment): cold key, no restore-keys,
-          # to force a full rebuild of all Koka targets at default --jobs.
-          key: bazel-paralleltest-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-
 
       - name: Tests (interpreters, PEG, fuzz smokes)
         run: bazel test --config=ci //test/... //fuzz/...

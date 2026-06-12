@@ -6,7 +6,7 @@ This project explores the design and implementation of simple programming langua
 
 Currently in an initial work-in-progress state.
 - e1 has a [language specification](docs/E1_SPEC.md), two [Koka](https://koka-lang.github.io/) interpreters (AST-based and [PEG](https://en.wikipedia.org/wiki/Parsing_expression_grammar) with actions), a C++ interpreter, and a C++ compiler (with C++ and LLVM IR backends)
-- e0, e2, e3, and e4 have PEG interpreters in Koka
+- e0, e2, e3, and e4 have PEG interpreters in Koka; e3 has a [language specification](docs/E3_SPEC.md)
 - Benchmarks for levels 1, 2, and 3
 - e5 and e6 have PEG grammars and example files, but no interpreters yet
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
@@ -104,6 +104,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 ## Further Reading
 
 - [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions
+- [docs/E1_SPEC.md](docs/E1_SPEC.md), [docs/E3_SPEC.md](docs/E3_SPEC.md) — Language specifications (e1: minimal; e3: introduces behavior categories)
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification, static analysis (`--warn` flag)
 - [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (Phases 1-2: e1, e2)

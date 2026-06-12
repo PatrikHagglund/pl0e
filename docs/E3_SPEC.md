@@ -8,6 +8,22 @@ e3 extends e2 with:
 - **Case expressions** (in addition to case statements)
 - **Function application** via juxtaposition
 
+Unlike the (deliberately minimal) e1 spec, this spec classifies behavior
+precisely — e3 is the level where multiple types make the distinctions
+interesting.
+
+## Behavior Categories
+
+| Category | Meaning |
+|----------|---------|
+| **Defined** | Identical across implementations. The differential-testable core. |
+| **Implementation-defined** | Each implementation chooses a consistent behavior (and should document it). |
+| **Undefined** | No requirements: reject, terminate, or substitute any behavior. |
+| **Runtime error** | The implementation must diagnose the condition and halt the program. |
+
+Unmarked behavior is defined. e6 is expected to turn most of e3's runtime
+errors into static (compile-time) errors.
+
 ## Syntax
 
 ### Grammar (PEG)
@@ -68,7 +84,14 @@ comment         = "//" [^\n]* / "/*" (!"*/" .)* "*/"
 | 𝔹 (booleans) | `true`, `false` | `&&` `\|\|` `!` |
 | () → T (callables) | closures | application via juxtaposition |
 
-Type bridge: relational operators `==` `!=` `<` `>` `<=` `>=` map ℤ × ℤ → 𝔹
+Type bridge: relational operators `==` `!=` `<` `>` `<=` `>=` map ℤ × ℤ → 𝔹.
+Additionally, `==` `!=` map 𝔹 × 𝔹 → 𝔹. Note this deviates from e2, where
+comparisons yield the *integers* 1/0 (see "Superset deviations" in
+[DESIGN.md](DESIGN.md)).
+
+e3 is dynamically typed: a variable may hold a value of any type, and
+operand types are checked at runtime (see Type Errors below). The integer
+range is implementation-defined, as in e1.
 
 ## Semantics
 
@@ -94,9 +117,51 @@ Evaluates arms top-to-bottom; returns value of first arm whose condition is trut
 
 ### Boolean Operations
 
-- `&&` and `||` are short-circuiting
+- `&&` and `||` are short-circuiting: the right operand is evaluated only
+  if the left does not decide the result
 - `!` negates a boolean
-- Integers in boolean context: 0 is falsy, non-zero is truthy
+
+### Case Guards (truthiness)
+
+Guards of case statements and case expressions are tried in order; the
+first *satisfied* arm is taken. A guard is satisfied when it evaluates to
+`true` or to a **nonzero integer**; `false` and `0` are not satisfied.
+This is the only place integers act as booleans — it keeps e2's
+default-arm idiom `1 -> ...` working. A guard evaluating to a closure is
+undefined.
+
+If no guard of a *case statement* is satisfied, the statement is a no-op.
+If no guard of a *case expression* is satisfied, the result is undefined.
+
+### Arithmetic
+
+As in e2: division and modulo are Euclidean (the remainder is
+non-negative: `-7 / 2` is `-4`, `-7 % 2` is `1`), and division or modulo
+by zero yields `0`.
+
+### Type Errors
+
+The following are **runtime errors** (diagnosed, the program halts):
+
+- Arithmetic (`+` `-` `*` `/` `%`, unary `-`) unless both operands are integers
+- Ordering comparison (`<` `<=` `>` `>=`) unless both operands are integers
+- `==` `!=` unless both operands are integers or both are booleans
+- `&&` `||` `!` unless the (evaluated) operands are booleans
+- Applying a value that is not a closure
+
+The single exception is case guards, which accept integers (see above).
+
+### Other Behavior
+
+- Referencing an undeclared variable is undefined (as in e1).
+- `break` outside any loop is undefined (as in e1).
+- `print` writes integers in decimal and booleans as `true`/`false`,
+  followed by a newline; the textual form of a closure is
+  implementation-defined.
+- Declarations (`x:`) create a variable with an implementation-defined
+  initial value.
+- Syntactically invalid programs are rejected. Memory exhaustion may
+  terminate any program.
 
 ## Examples
 

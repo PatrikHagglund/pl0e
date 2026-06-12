@@ -66,7 +66,7 @@ The range of representable integers (minimum and maximum values) is implementati
 
 **Loop** (`loop stmt`): Repeats `stmt` until `break_ifz` breaks out.
 
-**Break** (`break_ifz expr`): If `expr` evaluates to 0, exits innermost loop. Otherwise continues. Using outside any loop is an error.
+**Break** (`break_ifz expr`): If `expr` evaluates to 0, exits innermost loop. Otherwise continues. Using it outside any loop is undefined.
 
 **Print** (`print expr`): Outputs `expr` value followed by newline.
 
@@ -76,7 +76,7 @@ Implementations may provide zero or more `arg<N>` variables (`arg1`, `arg2`, ...
 
 ### Expressions
 
-**Variables**: Evaluates to current value. Referencing an undeclared variable is an error.
+**Variables**: Evaluates to current value. Referencing an undeclared variable is undefined.
 
 **Literals**: Decimal integers (e.g., `42`, `0`)
 
@@ -94,11 +94,11 @@ Behavior when a literal or arithmetic result exceeds the implementation's intege
 - Statements: sequential within blocks
 - Programs: top-to-bottom
 
-Invalid syntax and memory exhaustion are errors.
+Syntactically invalid programs are rejected. Memory exhaustion may terminate any program.
 
-### Error Handling
+### Undefined Behavior
 
-Error handling is either implementation-defined (reject at compile-time, terminate at runtime, use default behavior) or undefined.
+Where this spec says *undefined*, an implementation may do anything: reject the program, terminate at runtime, or substitute any behavior (such as a default value).
 
 ## Examples
 

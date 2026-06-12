@@ -78,6 +78,20 @@ fun eval(ex: expr, e: e3env): <div,type-error> rval
   match ex
     EVal(v) -> v
     EVar(s) -> env-get(e, s)
+    EBinop("&&", l, r) ->  // short-circuit: r is not evaluated when l is false
+      match eval(l, e)
+        VBool(False) -> VBool(False)
+        VBool(True) -> match eval(r, e)
+          VBool(b) -> VBool(b)
+          v -> do-type-error("'&&' on " ++ kind(v))
+        v -> do-type-error("'&&' on " ++ kind(v))
+    EBinop("||", l, r) ->  // short-circuit: r is not evaluated when l is true
+      match eval(l, e)
+        VBool(True) -> VBool(True)
+        VBool(False) -> match eval(r, e)
+          VBool(b) -> VBool(b)
+          v -> do-type-error("'||' on " ++ kind(v))
+        v -> do-type-error("'||' on " ++ kind(v))
     EBinop(op, l, r) ->
       val lv = eval(l, e)
       val rv = eval(r, e)
@@ -95,8 +109,6 @@ fun eval(ex: expr, e: e3env): <div,type-error> rval
         (">", VInt(a), VInt(b)) -> VBool(a > b)
         ("<=", VInt(a), VInt(b)) -> VBool(a <= b)
         (">=", VInt(a), VInt(b)) -> VBool(a >= b)
-        ("&&", VBool(a), VBool(b)) -> VBool(a && b)
-        ("||", VBool(a), VBool(b)) -> VBool(a || b)
         _ -> do-type-error("'" ++ op ++ "' on " ++ kind(lv) ++ " and " ++ kind(rv))
     ENot(inner) -> match eval(inner, e)
       VBool(b) -> VBool(!b)

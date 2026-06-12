@@ -98,6 +98,13 @@ check_type_error "apply_non_closure" 'x := 5\nprint x 3' "Type error: applying a
 echo 'print (1 < 2) == (3 < 4)' > "$TMP"
 check "bool_equality" "$E3 $TMP" "true"
 
+# Short-circuit: the right operand (a type error) must not be evaluated
+echo 'print false && (1 + true)' > "$TMP"
+check "and_short_circuit" "$E3 $TMP" "false"
+
+echo 'print true || (1 + true)' > "$TMP"
+check "or_short_circuit" "$E3 $TMP" "true"
+
 echo -e 'x := (3 < 5) + 1\nprint 99' > "$TMP"
 check "type_error_halts" "$E3 $TMP" ""
 

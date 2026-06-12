@@ -45,6 +45,17 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- Spec terminology (decision 2026-06-12): e1 spec stays minimal — "error"
+  replaced by standard "undefined" (Error Handling section collapsed to one
+  sentence, spec got simpler). Behavior categories (defined /
+  implementation-defined / undefined / runtime error) introduced in
+  E3_SPEC.md instead.
+- E3_SPEC.md completed (merged into user's draft): behavior categories,
+  type-error semantics, case-guard truthiness (only int-as-bool bridge),
+  Euclidean div with /0 = 0, e2 deviation noted. Draft said &&/|| are
+  short-circuiting but interpreters were eager — implemented short-circuit
+  in e3peg/e4peg to match spec (observable via type errors); tests added.
+
 - Runtime type errors in e3peg/e4peg (decision 2026-06-11): ill-typed ops
   (bool in arithmetic, ! on int, applying non-closure, mixed ==) print
   "Type error: ..." and halt, replacing silent VInt(0)/VBool(False)

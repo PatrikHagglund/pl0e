@@ -18,10 +18,11 @@
 - efuzz Phase 4: mutator (semantics-preserving transforms), reducer,
   PEG `--stats` fuel-regression mode (first candidate: e4peg takes >10s
   on some generated programs — see docs/FUZZING.md findings)
-- Report the Koka specializer loop upstream (koka-lang/koka): compiling
-  efuzz's effect-polymorphic co-evaluator at -O1+ dumps endless
-  "specialize: specInnerCalls" core traces; reproduces in v3.2.2 and
-  v3.2.3; workaround --fno-specialize (rules_koka koka_opts)
+- Koka specializer loop: reported and fixed in ../koka (dev branch, see
+  SPECIALIZER-LOOP-REPORT.md there). Once the fix ships in a release (or
+  the hermetic toolchain points at a patched build), drop the
+  --fno-specialize workaround from //src:efuzz and re-verify at -O3;
+  consider upstreaming the fix to koka-lang/koka if not already done
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Decide: e4 trailing-wildcard pattern quirk — `(_;)` matches any array
   and "exact pattern ignoring the last element" is inexpressible

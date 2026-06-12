@@ -19,6 +19,16 @@ LLVM_ROOT=$(dirname $(dirname "$CLANG_BIN"))
 BUILTIN_INCLUDE=$(echo "$LLVM_ROOT"/lib/clang/*/include)
 cat > $TMPDIR/clang_wrapper.sh <<WRAPPER_EOF
 #!/bin/bash
+# Koka invokes the C compiler both for compile-only steps (-c) and the
+# final link. Pass linker flags only when linking; on compile steps they
+# only produce "-Wunused-command-line-argument" warnings.
+linkflags=(-fuse-ld=lld -rtlib=compiler-rt \\
+    -B"$EXECROOT/{crt}" \\
+    -L"$EXECROOT/{glibc_lib}" \\
+    -Wl,--push-state -Wl,--as-needed -lpthread -ldl -Wl,--pop-state)
+for arg in "\\$@"; do
+  if [ "\\$arg" = "-c" ]; then linkflags=(); break; fi
+done
 exec "$CLANG_BIN" \\
     -target x86_64-linux-gnu \\
     --sysroot=/dev/null \\
@@ -26,12 +36,8 @@ exec "$CLANG_BIN" \\
     -isystem "$BUILTIN_INCLUDE" \\
     -isystem "$EXECROOT/{kernel}" \\
     -isystem "$EXECROOT/{glibc}" \\
-    -fuse-ld=lld \\
-    -rtlib=compiler-rt \\
     -resource-dir "$EXECROOT/{resource}" \\
-    -B"$EXECROOT/{crt}" \\
-    -L"$EXECROOT/{glibc_lib}" \\
-    -Wl,--push-state -Wl,--as-needed -lpthread -ldl -Wl,--pop-state \\
+    "\\${{linkflags[@]}}" \\
     "\\$@"
 WRAPPER_EOF
 chmod +x $TMPDIR/clang_wrapper.sh

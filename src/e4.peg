@@ -54,9 +54,11 @@ atom_raw        = int_lit_raw / bool_lit_raw / paren_expr / id:ident_raw { Var($
 
 // Parenthesized: array literal, unit, or grouped expression.
 // An array needs at least one ";": "(a)" is grouping, "(a;)" a 1-element array.
-paren_expr      = "(" _ ")" _ { Unit }
-                / "(" _ array_items ")" _ { Array }
-                / "(" _ e:expression ")" _ { $e }
+// No trailing whitespace: paren_expr is used in atom_raw, and consuming the
+// space after ")" would detach following application arguments (f (3) (5)).
+paren_expr      = "(" _ ")" { Unit }
+                / "(" _ array_items ")" { Array }
+                / "(" _ e:expression ")" { $e }
 array_items     = expression (";" _ expression)+ ";"? _
                 / expression ";" _
 

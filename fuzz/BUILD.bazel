@@ -119,3 +119,36 @@ sh_test(
     data = _DIFF_E3_DATA,
     timeout = "moderate",
 )
+
+# Differential fuzzing for e4 (e4peg vs expected + enforce oracle):
+#   bazel run //fuzz:diff_e4 -- <count> <start-seed> <size>
+_DIFF_E4_ARGS = [
+    "$(location //src:efuzz)",
+    "$(location //src:e4peg)",
+]
+
+_DIFF_E4_DATA = [
+    "//src:efuzz",
+    "//src:e4peg",
+    "//src:e4.peg",
+]
+
+sh_binary(
+    name = "diff_e4",
+    srcs = ["e4_diff.sh"],
+    args = _DIFF_E4_ARGS,
+    data = _DIFF_E4_DATA,
+)
+
+sh_test(
+    name = "efuzz_e4_smoke",
+    srcs = ["e4_diff.sh"],
+    args = _DIFF_E4_ARGS + [
+        "--",
+        "10",
+        "1",
+        "15",
+    ],
+    data = _DIFF_E4_DATA,
+    timeout = "moderate",
+)

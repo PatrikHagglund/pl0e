@@ -6,12 +6,17 @@
 - Implement e6peg interpreter (static typing). New efuzz oracle:
   well-typed-by-construction programs must type-check; ill-typed mutants
   must be rejected
-- efuzz Phase 3 (docs/FUZZING.md): e3/e4 generators — booleans, closures
-  (bounded depth), case expressions, arrays/patterns; would exercise the
-  `nomatch` and `oob` violation kinds the enforce oracle doesn't yet see
 - efuzz Phase 4: mutator (semantics-preserving transforms), reducer,
-  PEG `--stats` fuel-regression mode
+  PEG `--stats` fuel-regression mode (first candidate: e4peg takes >10s
+  on some generated programs — see docs/FUZZING.md findings)
+- Report the Koka specializer loop upstream (koka-lang/koka): compiling
+  efuzz's effect-polymorphic co-evaluator at -O1+ dumps endless
+  "specialize: specInnerCalls" core traces; reproduces in v3.2.2 and
+  v3.2.3; workaround --fno-specialize (rules_koka koka_opts)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
+- Decide: e4 trailing-wildcard pattern quirk — `(_;)` matches any array
+  and "exact pattern ignoring the last element" is inexpressible
+  (docs/FUZZING.md findings); fine as-is or change pattern syntax?
 
 ## Exploration ideas
 

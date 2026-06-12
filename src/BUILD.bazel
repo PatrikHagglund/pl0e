@@ -73,11 +73,14 @@ koka_binary(
     visibility = ["//visibility:public"],
 )
 
-# Random e1 program generator for differential fuzzing (docs/FUZZING.md)
+# Random e1-e4 program generator for differential fuzzing (docs/FUZZING.md).
+# --fno-specialize: the Koka 3.2.2 specializer loops (dumping core to stderr
+# for tens of minutes) on the effect-polymorphic co-evaluator at -O1+.
 koka_binary(
     name = "efuzz",
     main = "efuzz.koka",
     srcs = ["efuzz.koka"],
+    koka_opts = ["--fno-specialize"],
     visibility = ["//visibility:public"],
 )
 

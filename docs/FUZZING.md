@@ -194,7 +194,31 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
      oracle. Found an efuzz printer bug via 10/300 parse failures:
      comparison operands are `sum_expr`, so `a != !b` is ungrammatical
      (now noted in E3_SPEC.md).
-   - **e4** — arrays (in-bounds and deliberate `oob`), pattern matching.
+   - **e4** ✅ Done (`efuzz [seed] [size] 4`, `bazel run //fuzz:diff_e4`).
+     Arrays (literals, dot and dynamic indexing — out-of-bounds deliberately
+     generated: `oob` joins the violation kinds), pattern-case statements
+     and expressions (exact, prefix, literal, binder patterns; bindings
+     persist after statement arms, mirroring e4peg). Level-4 emission uses
+     scrutinee cases for loops/ifs since guard-style case is not e4 syntax.
+     Findings:
+     - **e4 grammar bug (fixed):** `paren_expr` consumed trailing
+       whitespace although `atom_raw` must not, so multi-argument
+       application with parenthesized arguments (`f (3) (5)`) silently
+       split into two statements, and `(f (3) (5))` failed to parse.
+     - **Pattern quirk (documented):** e4peg reads *any* trailing
+       wildcard element as the prefix marker — `(_;)` matches every
+       array, and "exact pattern ignoring the last element" is
+       inexpressible. The generator avoids emitting trailing `_` in
+       exact patterns.
+     - **Performance:** e4peg needs >10s on some generated programs
+       (PEG backtracking) — input for the planned `--stats`
+       fuel-regression mode.
+     - **Koka 3.2.2/3.2.3 specializer loop:** compiling efuzz's
+       effect-polymorphic co-evaluator at `-O1`+ sends Koka's
+       specializer into a core-dumping loop (hundreds of MB of
+       `specInnerCalls` traces). Worked around with a new
+       `koka_opts = ["--fno-specialize"]` attribute in rules_koka;
+       reproduces in Koka v3.2.3 — worth reporting upstream.
 4. **Phase 4 — hardening.** Mutator (semantics-preserving transforms:
    commute operands, split constants, wrap in always-true case) and
    PEG `--stats` fuel-regression mode. CI integration ✅ done:

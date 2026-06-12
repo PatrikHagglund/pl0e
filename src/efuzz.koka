@@ -59,19 +59,34 @@ type fexpr
   FAnd(l: fexpr, r: fexpr)              // level 3+, short-circuit
   FOr(l: fexpr, r: fexpr)               // level 3+, short-circuit
   FNot(e: fexpr)                        // level 3+
-  FCaseE(arms: list<(fexpr, fexpr)>)    // level 3+ guard-style case expression
+  FCaseE(arms: list<(fexpr, fexpr)>)    // level 3 guard-style case expression
   FLam(ps: list<string>, body: fexpr)   // level 3+, int params -> int body
   FApp(f: string, args: list<fexpr>)    // level 3+, full application of a named closure
+  FArr(elems: list<fexpr>)              // level 4: int-element array literal
+  FIdxDot(arr: string, i: int)          // level 4: arr.i (literal index, may be oob)
+  FIdxDyn(arr: string, idx: fexpr)      // level 4: arr (idx) (dynamic index, may be oob)
+  FCasePE(scrut: string, arms: list<(fpat, fexpr)>)  // level 4 pattern-case expression
+
+// Patterns (level 4)
+type fpat
+  PWildP
+  PVarP(name: string)
+  PLitP(n: int)
+  PArrP(elems: list<fpat>, rest: bool)  // exact (a; b;) or prefix (a; b; _)
 
 type fstmt
   FDecl(name: string)
   FAssign(name: string, e: fexpr)
   FPrint(e: fexpr)
-  // Counter-down loop; early is an optional early-break guard (level 2+).
+  // Counter-down loop; early is an optional early-break guard (level 2+;
+  // bool-typed at level 4, where it is emitted as a scrutinee case).
   FLoop(counter: string, bound: int, early: maybe<fexpr>, body: list<fstmt>)
   FIf(cond: string, body: list<fstmt>)
-  // Guard-style case statement: first arm with a satisfied guard wins (level 2+).
+  // Guard-style case statement: first arm with a satisfied guard wins (levels 2-3).
   FCase(arms: list<(fexpr, list<fstmt>)>)
+  // Pattern-case statement on an array variable (level 4). Pattern-variable
+  // bindings persist after the taken arm, mirroring e4peg.
+  FCaseP(scrut: string, arms: list<(fpat, list<fstmt>)>)
 
 // === Deterministic RNG (64-bit LCG, Knuth constants) ===
 
@@ -81,37 +96,41 @@ struct genst
   ivars: list<string>          // int variables (readable and assignable)
   bvars: list<string>          // bool variables (level 3+)
   fvars: list<(string, int)>   // closure variables: (name, arity) (level 3+)
+  avars: list<string>          // array variables (level 4)
   ros: list<string>            // read-only int vars (loop counters: assigning
                                // one could break guaranteed termination)
 
 fun rng-next(st: genst): (genst, int)
   val s2 = (st.seed * 6364136223846793005 + 1442695040888963407) % 18446744073709551616
-  (Genst(s2, st.nextid, st.ivars, st.bvars, st.fvars, st.ros), (s2 / 8589934592) % 2147483648)
+  (Genst(s2, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, st.ros), (s2 / 8589934592) % 2147483648)
 
 fun pick(st: genst, n: int): (genst, int)
   val (st2, r) = rng-next(st)
   (st2, r % n)
 
 fun fresh(st: genst, pre: string): (genst, string)
-  (Genst(st.seed, st.nextid + 1, st.ivars, st.bvars, st.fvars, st.ros), pre ++ st.nextid.show)
+  (Genst(st.seed, st.nextid + 1, st.ivars, st.bvars, st.fvars, st.avars, st.ros), pre ++ st.nextid.show)
 
 fun add-ivar(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, Cons(name, st.ivars), st.bvars, st.fvars, st.ros)
+  Genst(st.seed, st.nextid, Cons(name, st.ivars), st.bvars, st.fvars, st.avars, st.ros)
 
 fun add-bvar(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, st.ivars, Cons(name, st.bvars), st.fvars, st.ros)
+  Genst(st.seed, st.nextid, st.ivars, Cons(name, st.bvars), st.fvars, st.avars, st.ros)
 
 fun add-fvar(st: genst, name: string, arity: int): genst
-  Genst(st.seed, st.nextid, st.ivars, st.bvars, Cons((name, arity), st.fvars), st.ros)
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, Cons((name, arity), st.fvars), st.avars, st.ros)
+
+fun add-avar(st: genst, name: string): genst
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, Cons(name, st.avars), st.ros)
 
 fun add-ro(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, Cons(name, st.ros))
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, Cons(name, st.ros))
 
 fun with-ivars(st: genst, ivs: list<string>): genst
-  Genst(st.seed, st.nextid, ivs, st.bvars, st.fvars, st.ros)
+  Genst(st.seed, st.nextid, ivs, st.bvars, st.fvars, st.avars, st.ros)
 
 fun restore-vars(st: genst, saved: genst): genst
-  Genst(st.seed, st.nextid, saved.ivars, saved.bvars, saved.fvars, saved.ros)
+  Genst(st.seed, st.nextid, saved.ivars, saved.bvars, saved.fvars, saved.avars, saved.ros)
 
 fun pick-from(st: genst, vs: list<string>): (genst, maybe<string>)
   match vs
@@ -138,6 +157,9 @@ fun pick-fvar(st: genst): (genst, maybe<(string, int)>)
       val (st2, i) = pick(st, fs.length)
       (st2, fs.drop(i).head)
 
+fun pick-avar(st: genst): (genst, maybe<string>)
+  pick-from(st, st.avars)
+
 val cmp-ops = ["==", "!=", "<", "<=", ">", ">="]
 
 // === Generator ===
@@ -157,8 +179,10 @@ fun gen-iexpr(st: genst, depth: int, lvl: int): div (genst, fexpr)
     match mv
       Just(v) -> (st3, FVar(v))
       Nothing -> gen-lit(st3)
-  elif lvl >= 3 && r < 48 && !st2.fvars.is-nil then
+  elif lvl >= 3 && r < 46 && !st2.fvars.is-nil then
     gen-app(st2, depth, lvl)
+  elif lvl >= 4 && r < 52 && !st2.avars.is-nil then
+    gen-index(st2, depth, lvl)
   elif r < 52 then
     val (st3, e) = gen-iexpr(st2, depth - 1, lvl)
     (st3, FNeg(e))
@@ -190,6 +214,21 @@ fun gen-app(st: genst, depth: int, lvl: int): div (genst, fexpr)
     Just((f, arity)) ->
       val (st3, args) = gen-args(st2, depth, lvl, arity)
       (st3, FApp(f, args))
+    Nothing -> gen-lit(st2)
+
+// Array indexing (level 4). Indexes range over 0..4 regardless of length:
+// out-of-bounds is erroneous (oob, fallback 0) and deliberately generated.
+fun gen-index(st: genst, depth: int, lvl: int): div (genst, fexpr)
+  val (st2, ma) = pick-avar(st)
+  match ma
+    Just(a) ->
+      val (st3, q) = pick(st2, 100)
+      if q < 60 then
+        val (st4, i) = pick(st3, 5)
+        (st4, FIdxDot(a, i))
+      else
+        val (st4, idx) = gen-iexpr(st3, 1, lvl)
+        (st4, FIdxDyn(a, FMod(idx, FLit(5))))  // keep dynamic indexes small-ish
     Nothing -> gen-lit(st2)
 
 fun gen-args(st: genst, depth: int, lvl: int, n: int): div (genst, list<fexpr>)
@@ -295,7 +334,8 @@ fun gen-assign(st: genst, lvl: int): div (genst, list<fstmt>)
       (sta, mv.default("v0"))
   val (st4, q) = pick(st3, 100)
   val (st5, e) =
-    if lvl >= 3 && q < 18 then gen-case-expr(st4, lvl)
+    if lvl == 3 && q < 18 then gen-case-expr(st4, lvl)  // guard-style: not e4 syntax
+    elif lvl >= 4 && q < 18 && !st4.avars.is-nil then gen-casepe(st4, lvl)
     else gen-iexpr(st4, 3, lvl)
   val st6 = if st5.ivars.find(fn(v) v == name).is-just then st5 else st5.add-ivar(name)
   val (st7, mix) = pick(st6, 100)
@@ -303,6 +343,86 @@ fun gen-assign(st: genst, lvl: int): div (genst, list<fstmt>)
     (st7, [FAssign(name, e), FAssign("acc", FAdd(FVar("acc"), FVar(name)))])
   else
     (st7, [FAssign(name, e)])
+
+// Pattern-case expression (level 4): may have no matching arm, which is
+// erroneous (nomatch) — deliberately generatable for the enforce oracle.
+// Pattern-variable bindings are visible in the arm's value expression.
+fun gen-casepe(st: genst, lvl: int): div (genst, fexpr)
+  val (st2, ma) = pick-avar(st)
+  match ma
+    Just(a) ->
+      val (st3, n) = pick(st2, 2)
+      val (st4, arms) = gen-pe-arms(st3, lvl, n + 2)
+      (st4, FCasePE(a, arms))
+    Nothing -> gen-lit(st2)
+
+fun gen-pe-arms(st: genst, lvl: int, n: int): div (genst, list<(fpat, fexpr)>)
+  if n <= 0 then (st, [])
+  else
+    val (st2, p) =
+      if n == 1 then  // last arm: often (not always) a catch-all wildcard
+        val (sta, q) = pick(st, 100)
+        if q < 60 then (sta, PWildP) else gen-pat(sta)
+      else gen-pat(st)
+    val saved = st2
+    val st3 = add-pat-vars(st2, p)
+    val (st4, body) = gen-iexpr(st3, 2, lvl)
+    val st5 = st4.restore-vars(saved)
+    val (st6, rest) = gen-pe-arms(st5, lvl, n - 1)
+    (st6, Cons((p, body), rest))
+
+// A pattern over arrays: exact (a; b;), prefix (a; _), int literal, or var.
+fun gen-pat(st: genst): div (genst, fpat)
+  val (st2, r) = pick(st, 100)
+  if r < 70 then
+    val (st3, k) = pick(st2, 3)
+    val (st4, elems) = gen-pat-elems(st3, k + 1)
+    val (st5, q) = pick(st4, 100)
+    if q < 40 then (st5, PArrP(elems, True))
+    else
+      // e4peg reads ANY trailing wildcard element as the prefix marker
+      // ("(_;)" matches every array); an exact pattern must therefore not
+      // end in _ — replace a trailing wildcard with a fresh var binder.
+      match elems.reverse
+        Cons(PWildP, rrest) ->
+          val (st6, name) = fresh(st5, "m")
+          (st6, PArrP(Cons(PVarP(name), rrest).reverse, False))
+        _ -> (st5, PArrP(elems, False))
+  elif r < 85 then
+    val (st3, n) = pick(st2, 5)
+    (st3, PLitP(n))  // int literal: an array scrutinee never matches it
+  else
+    val (st3, name) = fresh(st2, "m")
+    (st3, PVarP(name))  // binds the whole scrutinee (an array)
+
+fun gen-pat-elems(st: genst, n: int): div (genst, list<fpat>)
+  if n <= 0 then (st, [])
+  else
+    val (st2, r) = pick(st, 100)
+    val (st3, p) =
+      if r < 50 then
+        val (sta, name) = fresh(st2, "m")
+        (sta, PVarP(name))
+      elif r < 75 then (st2, PWildP)
+      else
+        val (sta, k) = pick(st2, 100)
+        (sta, PLitP(k))
+    val (st4, rest) = gen-pat-elems(st3, n - 1)
+    (st4, Cons(p, rest))
+
+// Pattern variables bound by p become readable ints in the arm body
+// (element binders); a whole-scrutinee binder becomes an array variable.
+fun add-pat-vars(st: genst, p: fpat): genst
+  match p
+    PVarP(name) -> st.add-avar(name)  // top-level: binds the array
+    PArrP(elems, _) -> add-elem-vars(st, elems)
+    _ -> st
+
+fun add-elem-vars(st: genst, elems: list<fpat>): genst
+  match elems
+    Nil -> st
+    Cons(PVarP(name), rest) -> add-elem-vars(st.add-ivar(name), rest)
+    Cons(_, rest) -> add-elem-vars(st, rest)
 
 // Closure definition: 1-2 int params, int body over params and captured
 // variables (including previously defined closures — no cycles possible).
@@ -348,7 +468,12 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     val (st5, e) = gen-bexpr(st4, 2, lvl)
     val st6 = if st5.bvars.find(fn(v) v == name).is-just then st5 else st5.add-bvar(name)
     (st6, [FAssign(name, e)])
-  elif lvl >= 3 && r < 62 then gen-lambda(st2, lvl)
+  elif lvl >= 3 && r < 60 then gen-lambda(st2, lvl)
+  elif lvl >= 4 && r < 66 then
+    val (st3, name) = fresh(st2, "a")
+    val (st4, k) = pick(st3, 4)
+    val (st5, elems) = gen-args(st4, 2, lvl, k + 1)
+    (st5.add-avar(name), [FAssign(name, FArr(elems))])
   elif r < 80 && depth < 2 then
     val saved = st2
     val (st3, counter) = fresh(st2, "c")
@@ -358,7 +483,9 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
       if lvl >= 2 then
         val (sta, q) = pick(st5, 100)
         if q < 30 then
-          val (stb, g) = gen-guard(sta, lvl)
+          // Level 4 emits the early break as `case (g) { true -> break ... }`,
+          // so the guard must be bool-typed there; levels 2-3 use truthy guards.
+          val (stb, g) = if lvl >= 4 then gen-bexpr(sta, 2, lvl) else gen-guard(sta, lvl)
           (stb, Just(g))
         else (sta, Nothing)
       else (st5, Nothing)
@@ -366,13 +493,40 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     (st7.restore-vars(saved), [FLoop(counter, b + 1, early, body)])
   elif depth < 2 && !st2.ivars.is-nil then
     val (st3, q) = pick(st2, 100)
-    if lvl >= 2 && q < 50 then gen-case(st3, depth, lvl)
+    if lvl >= 4 && q < 50 && !st3.avars.is-nil then gen-casep(st3, depth, lvl)
+    elif lvl >= 2 && lvl <= 3 && q < 50 then gen-case(st3, depth, lvl)
     else
       val saved = st3
       val (st4, mv) = pick-from(st3, st3.ivars ++ st3.bvars ++ st3.ros)
       val (st5, body) = gen-stmts(st4, depth + 1, lvl)
       (st5.restore-vars(saved), [FIf(mv.default("acc"), body)])
   else gen-assign(st2, lvl)
+
+// Pattern-case statement on an array variable (level 4)
+fun gen-casep(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
+  val (st2, ma) = pick-avar(st)
+  match ma
+    Just(a) ->
+      val (st3, n) = pick(st2, 2)
+      val (st4, arms) = gen-p-arms(st3, depth, lvl, n + 2)
+      (st4, [FCaseP(a, arms)])
+    Nothing -> gen-assign(st2, lvl)
+
+fun gen-p-arms(st: genst, depth: int, lvl: int, n: int): div (genst, list<(fpat, list<fstmt>)>)
+  if n <= 0 then (st, [])
+  else
+    val (st2, p) =
+      if n == 1 then  // last arm: usually a catch-all wildcard
+        val (sta, q) = pick(st, 100)
+        if q < 70 then (sta, PWildP) else gen-pat(sta)
+      else gen-pat(st)
+    val saved = st2
+    val st3 = add-pat-vars(st2, p)
+    val (st4, nb) = pick(st3, 2)
+    val (st5, body) = gen-stmts-n(st4, depth + 1, lvl, nb + 1)
+    val st6 = st5.restore-vars(saved)
+    val (st7, rest) = gen-p-arms(st6, depth, lvl, n - 1)
+    (st7, Cons((p, body), rest))
 
 fun gen-case(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
   val (st2, n) = pick(st, 2)
@@ -409,7 +563,7 @@ fun gen-stmts-n(st: genst, depth: int, lvl: int, n: int): div (genst, list<fstmt
     (st3, ss1 ++ ss2)
 
 fun gen-program(seed: int, size: int, lvl: int): div list<fstmt>
-  val st0 = Genst(seed * 2 + 1, 0, [], [], [], []).add-ivar("acc")
+  val st0 = Genst(seed * 2 + 1, 0, [], [], [], [], []).add-ivar("acc")
   val (_, stmts) = gen-stmts-n(st0, 0, lvl, size)
   Cons(FAssign("acc", FLit(0)), stmts) ++ [FPrint(FVar("acc"))]
 
@@ -419,6 +573,7 @@ type rv
   RInt(n: int)
   RBool(b: bool)
   RClos(ps: list<string>, body: fexpr, cenv: list<(string, rv)>)
+  RArr(elems: list<rv>)
 
 alias fenv = list<(string, rv)>
 
@@ -499,6 +654,12 @@ fun feval(e: fenv, ex: fexpr): <div,exn,viol-flag> rv
       if feval(e, l).as-bool then RBool(True) else RBool(feval(e, r).as-bool)
     FNot(x) -> RBool(!feval(e, x).as-bool)
     FCaseE(arms) -> feval-case(e, arms)
+    FArr(elems) -> RArr(elems.map(fn(el) feval(e, el)))
+    FIdxDot(a, i) -> index-arr(e, a, i)
+    FIdxDyn(a, idx) ->
+      val i = feval(e, idx).as-int
+      index-arr(e, a, i)
+    FCasePE(scrut, arms) -> feval-casep(fget(e, scrut), arms, e)
     FLam(ps, body) -> RClos(ps, body, e)  // captures environment at creation
     FApp(f, args) ->
       match fget(e, f)
@@ -523,12 +684,70 @@ fun feval-case(e: fenv, arms: list<(fexpr, fexpr)>): <div,exn,viol-flag> rv
       if truthy(feval(e, g)) then feval(e, body)
       else feval-case(e, rest)
 
-fun mag(m: int, v: rv): int
+fun index-arr(e: fenv, a: string, i: int): <div,exn,viol-flag> rv
+  match fget(e, a)
+    RArr(elems) ->
+      if i >= 0 && i < elems.length then elems.drop(i).head.default(RInt(0))
+      else
+        mark-viol("oob")
+        RInt(0)
+    _ -> throw("efuzz internal error: array expected")
+
+// Mirrors e4peg match-pattern: exact length or prefix; returns bindings.
+fun match-pat(p: fpat, v: rv): div maybe<list<(string, rv)>>
+  match (p, v)
+    (PWildP, _) -> Just([])
+    (PVarP(name), _) -> Just([(name, v)])
+    (PLitP(n), RInt(m)) -> if n == m then Just([]) else Nothing
+    (PLitP(_), _) -> Nothing
+    (PArrP(elems, rest), RArr(vs)) ->
+      val len = vs.length
+      val plen = elems.length
+      if (if rest then len < plen else len != plen) then Nothing
+      else match-pat-elems(elems, vs)
+    _ -> Nothing
+
+fun match-pat-elems(ps: list<fpat>, vs: list<rv>): div maybe<list<(string, rv)>>
+  match (ps, vs)
+    (Nil, _) -> Just([])
+    (Cons(p, prest), Cons(v, vrest)) ->
+      match match-pat(p, v)
+        Nothing -> Nothing
+        Just(binds) -> match match-pat-elems(prest, vrest)
+          Nothing -> Nothing
+          Just(more) -> Just(binds ++ more)
+    _ -> Nothing
+
+fun bind-all(e: fenv, binds: list<(string, rv)>): fenv
+  match binds
+    Nil -> e
+    Cons((k, v), rest) -> bind-all(fset(e, k, v), rest)
+
+fun feval-casep(scrut: rv, arms: list<(fpat, fexpr)>, e: fenv): <div,exn,viol-flag> rv
+  match arms
+    Nil ->
+      mark-viol("nomatch")
+      RInt(0)
+    Cons((p, body), rest) ->
+      match match-pat(p, scrut)
+        Just(binds) -> feval(bind-all(e, binds), body)
+        Nothing -> feval-casep(scrut, rest, e)
+
+// Explicit recursion instead of foldl here and in bind-all: passing these
+// effect-polymorphic functions as values sends the Koka 3.2.2 specializer
+// into a core-dumping loop at -O1+ ("specInnerCalls: argument does not match").
+fun mag(m: int, v: rv): div int
   match v
     RInt(n) ->
       val an = if n < 0 then 0 - n else n
       if an > m then an else m
+    RArr(elems) -> mag-list(m, elems)
     _ -> m
+
+fun mag-list(m: int, vs: list<rv>): div int
+  match vs
+    Nil -> m
+    Cons(v, rest) -> mag-list(mag(m, v), rest)
 
 // Magnitude cap (10^60). Checked between statements and loop iterations
 // during co-evaluation, not just afterwards: repeated squaring (x := x * x
@@ -539,11 +758,14 @@ fun mag(m: int, v: rv): int
 // discarded with it.
 val mag-cap: int = 1000000000000000000000000000000000000000000000000000000000000
 
-fun show-rv(v: rv): string
+fun show-rv(v: rv): div string
   match v
     RInt(n) -> n.show
     RBool(b) -> if b then "true" else "false"
     RClos(_, _, _) -> "<closure>"
+    RArr(elems) ->  // e4peg format: "(1; 2;)", empty "()"
+      if elems.is-nil then "()"
+      else "(" ++ elems.map(show-rv).join("; ") ++ ";)"
 
 // Returns (env, output lines in reverse order, max |int value| seen)
 fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): <div,exn,viol-flag> (fenv, list<string>, int)
@@ -560,6 +782,16 @@ fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): <div,exn,viol-flag> (fe
       if truthy(fget(e, cond)) then fexec-all(e, body, out, m)
       else (e, out, m)
     FCase(arms) -> fexec-case(e, arms, out, m)
+    FCaseP(scrut, arms) -> fexec-casep(fget(e, scrut), arms, e, out, m)
+
+fun fexec-casep(scrut: rv, arms: list<(fpat, list<fstmt>)>, e: fenv, out: list<string>, m: int): <div,exn,viol-flag> (fenv, list<string>, int)
+  match arms
+    Nil -> (e, out, m)  // pattern-case statement no-match is a defined no-op
+    Cons((p, body), rest) ->
+      match match-pat(p, scrut)
+        // Bindings persist after the arm, mirroring e4peg's env-extend
+        Just(binds) -> fexec-all(bind-all(e, binds), body, out, m)
+        Nothing -> fexec-casep(scrut, rest, e, out, m)
 
 fun fexec-loop(e: fenv, c: string, early: maybe<fexpr>, body: list<fstmt>, out: list<string>, m: int): <div,exn,viol-flag> (fenv, list<string>, int)
   if fget(e, c).as-int == 0 || m > mag-cap then (e, out, m)
@@ -620,6 +852,7 @@ fun show-fexpr-raw(ex: fexpr): div string
     FAnd(l, r) -> show-fexpr(l) ++ " && " ++ show-fexpr(r)
     FOr(l, r) -> show-fexpr(l) ++ " || " ++ show-fexpr(r)
     FApp(f, args) -> f ++ " " ++ args.map(fn(a) "(" ++ show-fexpr(a) ++ ")").join(" ")
+    FIdxDyn(a, idx) -> a ++ " (" ++ show-fexpr(idx) ++ ")"
     _ -> show-fexpr(ex)
 
 fun show-cmp-opnd(ex: fexpr): div string
@@ -637,7 +870,21 @@ fun show-fexpr(ex: fexpr): div string
     FLam(ps, body) -> "\\" ++ ps.join(", ") ++ " -> " ++ show-fexpr(body)
     FCaseE(arms) ->
       "case { " ++ arms.map(fn((g, b)) show-fexpr(g) ++ " -> " ++ show-fexpr(b)).join(", ") ++ " }"
+    FArr(elems) -> "(" ++ elems.map(show-fexpr).join("; ") ++ ";)"
+    FIdxDot(a, i) -> a ++ "." ++ i.show
+    FCasePE(scrut, arms) ->
+      "case " ++ scrut ++ " { " ++
+        arms.map(fn((p, b)) show-fpat(p) ++ " -> " ++ show-fexpr(b)).join(", ") ++ " }"
     _ -> "(" ++ show-fexpr-raw(ex) ++ ")"
+
+fun show-fpat(p: fpat): div string
+  match p
+    PWildP -> "_"
+    PVarP(name) -> name
+    PLitP(n) -> n.show
+    PArrP(elems, rest) ->
+      if rest then "(" ++ elems.map(show-fpat).join("; ") ++ "; _)"
+      else "(" ++ elems.map(show-fpat).join("; ") ++ ";)"
 
 fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
   match s
@@ -645,7 +892,23 @@ fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
     FAssign(x, e) -> [ind ++ x ++ " := " ++ show-fexpr(e)]
     FPrint(e) -> [ind ++ "print " ++ show-fexpr(e)]
     FLoop(c, b, early, body) ->
-      if lvl >= 2 then
+      if lvl >= 4 then
+        // e4 case requires a scrutinee; the early-break guard is bool-typed
+        val early-stmt = match early
+          Just(g) -> [ind ++ "      case " ++ show-fexpr(g) ++ " { true -> { break } _ -> { } }"]
+          Nothing -> []
+        [ind ++ c ++ " := " ++ b.show,
+         ind ++ "loop {",
+         ind ++ "  case (" ++ c ++ " == 0) {",
+         ind ++ "    true -> { break }",
+         ind ++ "    _ -> {"]
+          ++ early-stmt
+          ++ show-fstmts(body, ind ++ "      ", lvl)
+          ++ [ind ++ "      " ++ c ++ " := " ++ c ++ " - 1",
+              ind ++ "    }",
+              ind ++ "  }",
+              ind ++ "}"]
+      elif lvl >= 2 then
         val early-arm = match early
           Just(g) -> [ind ++ "    " ++ show-fexpr(g) ++ " -> break"]
           Nothing -> []
@@ -668,7 +931,17 @@ fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
           ++ [ind ++ "  " ++ c ++ " := " ++ c ++ " - 1",
               ind ++ "}"]
     FIf(cond, body) ->
-      if lvl >= 2 then
+      if lvl >= 4 then
+        // Works for int and bool conditions: 0 and false skip the body,
+        // anything else falls to the wildcard arm (truthy semantics).
+        [ind ++ "case " ++ cond ++ " {",
+         ind ++ "  0 -> { }",
+         ind ++ "  false -> { }",
+         ind ++ "  _ -> {"]
+          ++ show-fstmts(body, ind ++ "    ", lvl)
+          ++ [ind ++ "  }",
+              ind ++ "}"]
+      elif lvl >= 2 then
         [ind ++ "case {",
          ind ++ "  " ++ cond ++ " -> {"]
           ++ show-fstmts(body, ind ++ "    ", lvl)
@@ -686,6 +959,12 @@ fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
           ++ show-fstmts(body, ind ++ "    ", lvl)
           ++ [ind ++ "  }"]
       [ind ++ "case {"] ++ arm-lines ++ [ind ++ "}"]
+    FCaseP(scrut, arms) ->
+      val arm-lines = arms.flatmap fn((p, body))
+        [ind ++ "  " ++ show-fpat(p) ++ " -> {"]
+          ++ show-fstmts(body, ind ++ "    ", lvl)
+          ++ [ind ++ "  }"]
+      [ind ++ "case " ++ scrut ++ " {"] ++ arm-lines ++ [ind ++ "}"]
 
 fun show-fstmts(ss: list<fstmt>, ind: string, lvl: int): div list<string>
   ss.flatmap(fn(s) show-fstmt(s, ind, lvl))

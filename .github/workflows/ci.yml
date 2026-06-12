@@ -49,6 +49,9 @@ jobs:
       - name: Differential fuzzing, e3 (25 fresh seeds)
         run: bazel run --config=ci //fuzz:diff_e3 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25
 
+      - name: Differential fuzzing, e4 (25 fresh seeds)
+        run: bazel run --config=ci //fuzz:diff_e4 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 20
+
       - name: Upload fuzz failures
         if: failure()
         uses: actions/upload-artifact@v4

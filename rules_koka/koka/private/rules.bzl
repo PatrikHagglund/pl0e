@@ -94,7 +94,7 @@ trap "rm -rf $TMPDIR" EXIT
 mkdir -p $TMPDIR/build
 {copy_cmds}
 {wrapper}
-KOKA="$EXECROOT/{koka} -O3 --cc=$TMPDIR/clang_wrapper.sh"
+KOKA="$EXECROOT/{koka} -O3 {koka_opts} --cc=$TMPDIR/clang_wrapper.sh"
 cd $TMPDIR/build
 {compile_cmds}
 $KOKA -o "$EXECROOT/{out}" "{main}"
@@ -102,6 +102,7 @@ $KOKA -o "$EXECROOT/{out}" "{main}"
         copy_cmds = "\n".join(copy_cmds),
         wrapper = wrapper_script,
         koka = tc.koka.path,
+        koka_opts = " ".join(ctx.attr.koka_opts),
         compile_cmds = compile_cmds,
         out = out.path,
         main = ctx.file.main.path,
@@ -165,6 +166,9 @@ koka_binary = rule(
     attrs = dict(_COMMON_ATTRS, **dict(_TOOLCHAIN_ATTRS, **{
         "main": attr.label(allow_single_file = [".koka"], mandatory = True),
         "data": attr.label_list(allow_files = True),
+        "koka_opts": attr.string_list(
+            doc = "Extra options passed to the koka compiler (after -O3).",
+        ),
     })),
     executable = True,
     toolchains = ["@rules_koka//koka:toolchain_type"],

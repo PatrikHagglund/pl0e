@@ -108,6 +108,26 @@ check "or_short_circuit" "$E3 $TMP" "true"
 echo -e 'x := (3 < 5) + 1\nprint 99' > "$TMP"
 check "type_error_halts" "$E3 $TMP" ""
 
+# Erroneous constructs (E3_SPEC.md): fallback / observe / enforce modes
+echo -e 'print 1 / 0\nprint xyz\nprint 7' > "$TMP"
+check "erroneous_fallback" "$E3 $TMP" "0 0 7"
+check "erroneous_enforce" "$E3 --enforce $TMP" ""
+
+out=$(timeout $TIMEOUT "$E3" --erroneous=observe "$TMP" 2>&1)
+if echo "$out" | grep -q "Violation (div0): division by zero" \
+    && echo "$out" | grep -q "Violation (unbound)" \
+    && echo "$out" | grep -q "^7$"; then
+    echo "PASS erroneous_observe"
+    pass=$((pass+1))
+else
+    echo "FAIL erroneous_observe"
+    fail=$((fail+1))
+fi
+
+# Per-kind override: unbound falls back (prints 0), then div0 enforces (halt)
+echo -e 'print xyz\nprint 1 / 0\nprint 7' > "$TMP"
+check "erroneous_per_kind" "$E3 --erroneous=enforce --erroneous:unbound=fallback $TMP" "0"
+
 rm -f "$TMP"
 
 echo ""

@@ -117,6 +117,23 @@ effect loop-break
 effect type-error
   ctl do-type-error(msg: string): a
 
+// Erroneous constructs (E3_SPEC.md): incorrect but with a bounded
+// consequence — a specified fallback value, or a diagnostic, per the
+// handling mode (enforce / observe / fallback / unchecked) selected with
+// --enforce, --erroneous=MODE, or --erroneous:KIND=MODE.
+// Kinds: div0, unbound, nomatch, oob.
+effect violation
+  ctl violate(knd: string, msg: string, fb: rval): rval
+
+alias err-modes = list<(string, string)>
+
+fun get-mode(modes: err-modes, knd: string): string
+  match modes.filter(fn(p) p.fst == knd)
+    Cons((_, m), _) -> m
+    Nil -> match modes.filter(fn(p) p.fst == "*")
+      Cons((_, m), _) -> m
+      Nil -> "fallback"
+
 fun kind(v: rval): string
   match v
     VInt(_) -> "int"
@@ -124,15 +141,19 @@ fun kind(v: rval): string
     VArray(_) -> "array"
     VClosure(_, _, _) -> "closure"
 
-fun eval(ex: expr, e: e4env): <div,type-error> rval
+fun eval(ex: expr, e: e4env): <div,type-error,violation> rval
   match ex
     EVal(v) -> v
-    EVar(s) -> env-get(e, s)
+    EVar(s) -> match e.filter(fn(p) p.fst == s)
+      Cons((_, v), _) -> v
+      Nil -> violate("unbound", "undeclared variable '" ++ s ++ "'", VInt(0))
     EArray(elems) -> VArray(elems.map(fn(el) eval(el, e)).vector)
     EIndex(arr, idx) ->
       match eval(arr, e)
-        VArray(v) -> v.at(idx).default(VInt(0))
-        _ -> VInt(0)
+        VArray(v) -> match v.at(idx)
+          Just(x) -> x
+          Nothing -> violate("oob", "index " ++ idx.show ++ " out of bounds (length " ++ v.length.show ++ ")", VInt(0))
+        v -> do-type-error("indexing " ++ kind(v))
     EBinop("&&", l, r) ->  // short-circuit: r is not evaluated when l is false
       match eval(l, e)
         VBool(False) -> VBool(False)
@@ -154,8 +175,10 @@ fun eval(ex: expr, e: e4env): <div,type-error> rval
         ("+", VInt(a), VInt(b)) -> VInt(a + b)
         ("-", VInt(a), VInt(b)) -> VInt(a - b)
         ("*", VInt(a), VInt(b)) -> VInt(a * b)
-        ("/", VInt(a), VInt(b)) -> VInt(if b == 0 then 0 else a / b)
-        ("%", VInt(a), VInt(b)) -> VInt(if b == 0 then 0 else a % b)
+        ("/", VInt(a), VInt(b)) ->
+          if b == 0 then violate("div0", "division by zero", VInt(0)) else VInt(a / b)
+        ("%", VInt(a), VInt(b)) ->
+          if b == 0 then violate("div0", "modulo by zero", VInt(0)) else VInt(a % b)
         ("==", VInt(a), VInt(b)) -> VBool(a == b)
         ("!=", VInt(a), VInt(b)) -> VBool(a != b)
         ("==", VBool(a), VBool(b)) -> VBool(a == b)
@@ -175,7 +198,9 @@ fun eval(ex: expr, e: e4env): <div,type-error> rval
       val fv = eval(f, e)
       val av = eval(a, e)
       match (fv, av)
-        (VArray(arr), VInt(idx)) -> arr.at(idx).default(VInt(0))
+        (VArray(arr), VInt(idx)) -> match arr.at(idx)
+          Just(x) -> x
+          Nothing -> violate("oob", "index " ++ idx.show ++ " out of bounds (length " ++ arr.length.show ++ ")", VInt(0))
         (VClosure(params, body, cenv), _) ->
           match params
             Cons(p, rest) ->
@@ -189,15 +214,15 @@ fun eval(ex: expr, e: e4env): <div,type-error> rval
       eval-case-arms(sv, arms, e)
     EFunc(params, body) -> VClosure(params, body, e)
 
-fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e4env): <div,type-error> rval
+fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e4env): <div,type-error,violation> rval
   match arms
-    Nil -> VInt(0)
+    Nil -> violate("nomatch", "no case arm matched", VInt(0))
     Cons((pat, body), rest) ->
       match match-pattern(pat, scrut)
         Just(binds) -> eval(body, env-extend(e, binds))
         Nothing -> eval-case-arms(scrut, rest, e)
 
-fun exec(s: stmt, e: e4env): <div,console,loop-break,type-error> e4env
+fun exec(s: stmt, e: e4env): <div,console,loop-break,type-error,violation> e4env
   match s
     SExpr(_) -> e
     SAssign(id, ex) -> env-set(e, id, eval(ex, e))
@@ -207,7 +232,7 @@ fun exec(s: stmt, e: e4env): <div,console,loop-break,type-error> e4env
       e
     SLoop(body) ->
       with ctl do-break(e1) e1
-      fun go(env: e4env): <div,console,loop-break,type-error> e4env
+      fun go(env: e4env): <div,console,loop-break,type-error,violation> e4env
         go(exec(body, env))
       go(e)
     SBreak -> do-break(e)
@@ -216,7 +241,7 @@ fun exec(s: stmt, e: e4env): <div,console,loop-break,type-error> e4env
       val sv = eval(scrut, e)
       exec-case-arms(sv, arms, e)
 
-fun exec-case-arms(scrut: rval, arms: list<(pattern, stmt)>, e: e4env): <div,console,loop-break,type-error> e4env
+fun exec-case-arms(scrut: rval, arms: list<(pattern, stmt)>, e: e4env): <div,console,loop-break,type-error,violation> e4env
   match arms
     Nil -> e
     Cons((pat, body), rest) ->
@@ -381,8 +406,19 @@ fun e4-action(name: string, txt: string, children: list<semval>, caps: captures<
     Cons(c, Nil) -> c
     _ -> SVList(cs)
 
-// Returns Nothing on a type error: the program halts.
-fun exec-safe(sv: semval, e: e4env): <div,console> maybe<e4env>
+// Returns Nothing on a type error or enforced violation: the program halts.
+fun exec-safe(sv: semval, e: e4env, modes: err-modes): <div,console> maybe<e4env>
+  with ctl violate(knd, msg, fb)
+    val m = get-mode(modes, knd)
+    if m == "enforce" then
+      println("Violation (" ++ knd ++ "): " ++ msg)
+      Nothing
+    elif m == "observe" then
+      println("Violation (" ++ knd ++ "): " ++ msg)
+      resume(fb)
+    else  // fallback / unchecked: the fallback value is the cheapest
+          // behavior an interpreter has; unchecked matters for compilers
+      resume(fb)
   with ctl do-type-error(msg)
     println("Type error: " ++ msg)
     Nothing
@@ -394,25 +430,38 @@ fun exec-safe(sv: semval, e: e4env): <div,console> maybe<e4env>
     SVList(Cons(SVStmt(s), _)) -> Just(exec(s, e))
     _ -> Just(e)
 
-fun parse-flags(args: list<string>): div (bool, bool, bool, list<string>)
+// --enforce | --erroneous=MODE | --erroneous:KIND=MODE (see E3_SPEC.md)
+fun parse-err-flag(arg: string): maybe<(string, string)>
+  if arg == "--enforce" then Just(("*", "enforce"))
+  elif arg.starts-with("--erroneous=").bool then
+    Just(("*", arg.replace-all("--erroneous=", "")))
+  elif arg.starts-with("--erroneous:").bool then
+    match arg.replace-all("--erroneous:", "").split("=")
+      Cons(k, Cons(m, _)) -> Just((k, m))
+      _ -> Nothing
+  else Nothing
+
+fun parse-flags(args: list<string>): div (bool, bool, bool, err-modes, list<string>)
   match args
     Cons("--dump", rest) ->
-      val (_, w, s, r) = parse-flags(rest)
-      (True, w, s, r)
+      val (_, w, s, em, r) = parse-flags(rest)
+      (True, w, s, em, r)
     Cons("--warn", rest) ->
-      val (d, _, s, r) = parse-flags(rest)
-      (d, True, s, r)
+      val (d, _, s, em, r) = parse-flags(rest)
+      (d, True, s, em, r)
     Cons("--stats", rest) ->
-      val (d, w, _, r) = parse-flags(rest)
-      (d, w, True, r)
+      val (d, w, _, em, r) = parse-flags(rest)
+      (d, w, True, em, r)
     Cons(x, rest) ->
-      val (d, w, s, r) = parse-flags(rest)
-      (d, w, s, Cons(x, r))
-    Nil -> (False, False, False, [])
+      val (d, w, s, em, r) = parse-flags(rest)
+      match parse-err-flag(x)
+        Just(km) -> (d, w, s, Cons(km, em), r)
+        Nothing -> (d, w, s, em, Cons(x, r))
+    Nil -> (False, False, False, [], [])
 
 pub fun main()
   val args = get-args()
-  val (do-dump, do-warn, do-stats, rest-args) = parse-flags(args)
+  val (do-dump, do-warn, do-stats, err-flags, rest-args) = parse-flags(args)
 
   val prog-path = match rest-args { Cons(p, _) -> p; Nil -> "examples/example.e4" }
   val arg1-val = match rest-args { Cons(_, Cons(n, _)) -> n.parse-int.default(0); _ -> 0 }
@@ -448,7 +497,7 @@ pub fun main()
     while { !input.is-empty }
       match peg-exec-partial(g, [], e4-action, "statement", input)
         (_, Just((rest, sv))) ->
-          match exec-safe(sv, current-env)
+          match exec-safe(sv, current-env, err-flags)
             Just(e2) ->
               current-env := e2
               match peg-exec-partial(g, [], e4-action, "_", rest)

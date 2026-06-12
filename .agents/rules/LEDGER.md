@@ -7,6 +7,12 @@ Explore simple language design/implementation inspired by PL/0.
 ## Key decisions
 
 - Keep languages small
+- Erroneous-behavior category (2026-06-12, C++26-contracts-inspired,
+  E3_SPEC.md): incorrect-but-bounded constructs (div0, unbound, nomatch,
+  oob) have a spec'd fallback value; handling is a per-kind implementation
+  option: enforce / observe / fallback (default) / unchecked. No-assumption
+  rule in all modes except unchecked. Type confusion stays a hard runtime
+  error (no principled fallback).
 - Progressive complexity (e0–e6), each level *almost* a strict superset of
   the previous. Deliberate deviations (DESIGN.md "Superset deviations"):
   break_ifz dropped at e2+ (too ugly above e1); e3 comparisons yield
@@ -35,9 +41,9 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Open questions
 
-- Unbound variables silently evaluate to 0 (env-get default, all levels)
-  although E1_SPEC says referencing an undeclared variable is an error.
-  Kept unchanged for now (user decision 2026-06-11); discuss pros/cons.
+(none — unbound variables resolved 2026-06-12 via the erroneous-behavior
+category: classified erroneous at e3+ with fallback 0, undefined at e1/e2;
+the 0-default and an enforcing implementation are both conforming)
 
 ## Now
 
@@ -45,6 +51,15 @@ Explore simple language design/implementation inspired by PL/0.
 
 ## Done (prune when exceeding 20 items)
 
+- Erroneous behavior + handling modes (2026-06-12): violation ctl effect
+  in e3peg/e4peg with kinds div0/unbound/nomatch/oob and per-kind modes
+  via --enforce / --erroneous=MODE / --erroneous:KIND=MODE. Default
+  (fallback) preserves prior behavior; observe diagnoses and continues;
+  enforce halts. E3_SPEC.md "Erroneous Behavior and Handling Modes"
+  documents the C++26 mapping (enforce/observe=P2900, fallback=EB P2795,
+  unchecked=ignore) incl. that C++ ignore has NO fallback value. e4
+  EIndex on non-array now a type error; OOB indexing erroneous. Mode
+  tests in e3/e4 test scripts.
 - Spec terminology (decision 2026-06-12): e1 spec stays minimal — "error"
   replaced by standard "undefined" (Error Handling section collapsed to one
   sentence, spec got simpler). Behavior categories (defined /

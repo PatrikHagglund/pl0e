@@ -123,6 +123,21 @@ fi
 echo -e 'x := (3 < 5) + 1\nprint 99' > "$TMP"
 check "type_error_halts" "$E4 $TMP" ""
 
+# Erroneous constructs (E3_SPEC.md): out-of-bounds is erroneous (kind oob)
+echo -e 'arr := (10; 20;)\nprint arr.5\nprint 7' > "$TMP"
+check "oob_fallback" "$E4 $TMP" "0 7"
+check "oob_enforce" "$E4 --enforce $TMP" ""
+
+out=$(timeout $TIMEOUT "$E4" --erroneous=observe "$TMP" 2>&1)
+if echo "$out" | grep -q "Violation (oob): index 5 out of bounds" \
+    && echo "$out" | grep -q "^7$"; then
+    echo "PASS oob_observe"
+    pass=$((pass+1))
+else
+    echo "FAIL oob_observe"
+    fail=$((fail+1))
+fi
+
 rm -f "$TMP"
 
 echo ""

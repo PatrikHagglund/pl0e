@@ -18,11 +18,41 @@ interesting.
 |----------|---------|
 | **Defined** | Identical across implementations. The differential-testable core. |
 | **Implementation-defined** | Each implementation chooses a consistent behavior (and should document it). |
+| **Erroneous** | The program is incorrect, but the consequence is bounded: a specified *fallback value*, or a diagnostic — per the handling mode (see below). |
 | **Undefined** | No requirements: reject, terminate, or substitute any behavior. |
 | **Runtime error** | The implementation must diagnose the condition and halt the program. |
 
 Unmarked behavior is defined. e6 is expected to turn most of e3's runtime
 errors into static (compile-time) errors.
+
+### Erroneous Behavior and Handling Modes
+
+Each erroneous construct has a specified fallback value. How a violation
+is handled is an implementation *option*, selectable per violation kind
+(in the Koka interpreters: `--enforce`, `--erroneous=MODE`,
+`--erroneous:KIND=MODE`):
+
+| Mode | Checked? | On violation |
+|------|----------|--------------|
+| `enforce` | yes | diagnose and halt |
+| `observe` | yes | diagnose, continue with the fallback value |
+| `fallback` (default) | yes | continue with the fallback value, silently |
+| `unchecked` | no | undefined — the performance escape hatch (a compiler may omit guards) |
+
+In every mode except `unchecked`, an implementation must not *assume*
+that erroneous operations are unreachable (no optimization on that basis).
+
+This design follows the C++26 contracts discussion: `enforce`/`observe`
+correspond to P2900's evaluation semantics, `fallback` to C++26
+"erroneous behavior" (P2795: a defined-but-incorrect result that
+implementations may diagnose), and `unchecked` to P2900's `ignore` — with
+the difference that C++ contracts never supply fallback values (ignored
+contracts fall through to the annotated code's own semantics), whereas
+here the language itself must say what the operation yields. The
+no-assumption rule is C++'s hard-won lesson: coupling "checked assertion"
+with "optimizer may assume" turns violations into undefined behavior.
+
+Violation kinds at e3: `div0`, `unbound`, `nomatch` (e4 adds `oob`).
 
 ## Syntax
 
@@ -131,13 +161,14 @@ default-arm idiom `1 -> ...` working. A guard evaluating to a closure is
 undefined.
 
 If no guard of a *case statement* is satisfied, the statement is a no-op.
-If no guard of a *case expression* is satisfied, the result is undefined.
+If no guard of a *case expression* is satisfied, that is **erroneous**
+(kind `nomatch`, fallback value 0): an expression must produce a value.
 
 ### Arithmetic
 
 As in e2: division and modulo are Euclidean (the remainder is
-non-negative: `-7 / 2` is `-4`, `-7 % 2` is `1`), and division or modulo
-by zero yields `0`.
+non-negative: `-7 / 2` is `-4`, `-7 % 2` is `1`). Division or modulo by
+zero is **erroneous** (kind `div0`, fallback value 0).
 
 ### Type Errors
 
@@ -153,7 +184,8 @@ The single exception is case guards, which accept integers (see above).
 
 ### Other Behavior
 
-- Referencing an undeclared variable is undefined (as in e1).
+- Referencing an undeclared variable is **erroneous** (kind `unbound`,
+  fallback value 0). (At e1, deliberately minimal, this is undefined.)
 - `break` outside any loop is undefined (as in e1).
 - `print` writes integers in decimal and booleans as `true`/`false`,
   followed by a newline; the textual form of a closure is

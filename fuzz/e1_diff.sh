@@ -48,7 +48,7 @@ run_filtered() {
 
 for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
     prog="$TMP/prog.e1"
-    if ! "$EFUZZ" "$seed" "$SIZE" > "$prog"; then
+    if ! timeout 30 "$EFUZZ" "$seed" "$SIZE" > "$prog"; then
         echo "FAIL seed=$seed: generator error"
         fail=$((fail + 1))
         continue

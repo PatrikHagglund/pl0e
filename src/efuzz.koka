@@ -305,6 +305,15 @@ fun mag(m: int, v: int): int
   val av = if v < 0 then 0 - v else v
   if av > m then av else m
 
+// Magnitude cap (10^60). Checked between statements and loop iterations
+// during co-evaluation, not just afterwards: repeated squaring (x := x * x
+// in a loop or a long statement sequence) otherwise produces million-digit
+// bigints and hangs the generator before the final check is ever reached
+// (found via seed 1114). A program exceeding the cap is abandoned
+// mid-evaluation and regenerated; its (now wrong) co-evaluation result is
+// discarded with it.
+val mag-cap: int = 1000000000000000000000000000000000000000000000000000000000000
+
 // Returns (env, output lines in reverse order, max |value| seen)
 fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): div (fenv, list<string>, int)
   match s
@@ -322,7 +331,7 @@ fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): div (fenv, list<string>
     FCase(arms) -> fexec-case(e, arms, out, m)
 
 fun fexec-loop(e: fenv, c: string, early: maybe<fexpr>, body: list<fstmt>, out: list<string>, m: int): div (fenv, list<string>, int)
-  if fget(e, c) == 0 then (e, out, m)
+  if fget(e, c) == 0 || m > mag-cap then (e, out, m)
   else
     val stop = match early
       Just(g) -> feval(e, g) != 0
@@ -344,7 +353,8 @@ fun fexec-all(e: fenv, ss: list<fstmt>, out: list<string>, m: int): div (fenv, l
     Nil -> (e, out, m)
     Cons(s, rest) ->
       val (e2, out2, m2) = fexec(e, s, out, m)
-      fexec-all(e2, rest, out2, m2)
+      if m2 > mag-cap then (e2, out2, m2)  // abandon: program will be regenerated
+      else fexec-all(e2, rest, out2, m2)
 
 // Returns (output lines, max |value| seen)
 fun run-program(prog: list<fstmt>): div (list<string>, int)
@@ -426,16 +436,16 @@ fun show-fstmts(ss: list<fstmt>, ind: string, lvl: int): div list<string>
 
 // === Main ===
 
-fun pow10(n: int): div int
-  if n <= 0 then 1 else 10 * pow10(n - 1)
-
 // Regenerate with a different internal seed if values explode
 // (multiplication inside loops); keeps interpreter runtimes sane.
-fun generate(seed: int, size: int, lvl: int, attempt: int): div (list<fstmt>, list<string>)
+// An over-cap program has an aborted (wrong) co-evaluation, so it must
+// never be emitted: after 10 over-cap attempts, fail loudly instead.
+fun generate(seed: int, size: int, lvl: int, attempt: int): <div,exn> (list<fstmt>, list<string>)
   val prog = gen-program(seed * 1000 + attempt * 137, size, lvl)
   val (out, m) = run-program(prog)
-  if m > pow10(60) && attempt < 9 then generate(seed, size, lvl, attempt + 1)
-  else (prog, out)
+  if m <= mag-cap then (prog, out)
+  elif attempt < 9 then generate(seed, size, lvl, attempt + 1)
+  else throw("efuzz: magnitude cap exceeded on all attempts for seed " ++ seed.show)
 
 pub fun main()
   val args = get-args()

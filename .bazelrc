@@ -24,7 +24,6 @@ build --host_cxxopt=-Wno-vla-cxx-extension
 build:koka-local --repo_env=KOKA_LOCAL_PATH=/repo/uabpath/koka/dist-newstyle/build/x86_64-linux/ghc-9.10.3/koka-3.2.7/x/koka/build/koka/koka
 
 # CI configuration (GitHub Actions, see .github/workflows/ci.yml)
-build:ci --jobs=2                # Koka compiles are memory-hungry (OOM at high parallelism)
 build:ci --copt=-march=x86-64    # overrides -march=native: portable across runner CPU generations
 build:ci --disk_cache=~/.cache/bazel-disk
 build:ci --repository_cache=~/.cache/bazel-repo

@@ -26,8 +26,13 @@ jobs:
           path: |
             ~/.cache/bazel-disk
             ~/.cache/bazel-repo
-          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+          # Always-save pattern: cache keys are immutable, so a key that only
+          # hashes the lockfile goes stale when outputs change for other
+          # reasons (e.g. a toolchain bump in rules_koka). Unique key per run,
+          # restore the nearest previous cache.
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}-${{ github.run_id }}
           restore-keys: |
+            bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}-
             bazel-
 
       - name: Tests (interpreters, PEG, fuzz smokes)

@@ -59,6 +59,15 @@ koka_binary(
     visibility = ["//visibility:public"],
 )
 
+koka_binary(
+    name = "e5peg",
+    main = "e5peg.koka",
+    srcs = ["e5peg.koka"],
+    deps = [":peg_lib"],
+    data = ["e5.peg"],
+    visibility = ["//visibility:public"],
+)
+
 # Hand-written Koka interpreter (two-phase: parse to AST, then evaluate)
 koka_library(
     name = "e1_koka_lib",

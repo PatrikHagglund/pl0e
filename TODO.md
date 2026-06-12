@@ -2,10 +2,15 @@
 
 ## Next
 
-- Implement e5peg interpreter (records, unit)
 - Implement e6peg interpreter (static typing). New efuzz oracle:
   well-typed-by-construction programs must type-check; ill-typed mutants
   must be rejected
+- e5 deferred design questions (from the pre-implementation e5.peg draft,
+  saved decisions for later): tuples `(a, b)`, optional case scrutinee,
+  block-as-expression (trailing expression value), lvalue assignment paths
+  (`rec.field := e`, `arr.0 := e`)
+- efuzz Phase 3c: extend the generator to e5 (records in the value domain,
+  record patterns, field access; `nofield` as a violation kind candidate)
 - efuzz Phase 4: mutator (semantics-preserving transforms), reducer,
   PEG `--stats` fuel-regression mode (first candidate: e4peg takes >10s
   on some generated programs — see docs/FUZZING.md findings)

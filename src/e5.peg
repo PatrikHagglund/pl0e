@@ -1,99 +1,111 @@
-// PL/0 Grammar (PEG variant) - Level 4: Records + Unit Literal
+// PL/0 Level 5 Grammar (PEG variant)
+// Adds: records {x: 1, y: 2}, record patterns, field access rec.field,
+// and an explicit unit literal (on top of e4: arrays, pattern matching).
 //
-// Adds to Level 3:
-//   Records: {x: 1, y: 2}
-//   Unit literal: ()
-//
-// Access:
-//   f x       — evaluated (juxtaposition)
-//   rec.field — literal field (dot)
-//   arr.0     — literal index (dot)
+// Deliberately e4-based: the earlier draft's tuples, optional case
+// scrutinee, block-as-expression, and lvalue paths (rec.field := e) are
+// deferred design questions (see TODO.md).
 
-// Program structure
-program         = _ top_level_stmt*
+program         = _ statement*
+statement       = binding / case_stmt / loop_stmt / break_stmt / print_stmt / block / expression
 
-// Statements
-top_level_stmt  = binding / expression
-statement       = control / print_stmt / top_level_stmt
+block           = "{" _ (statement ";"? _)* "}" _ { Block }
+loop_stmt       = "loop" _ body:statement { Loop($body) }
+break_stmt      = "break" _ { Break }
+print_stmt      = "print" _ e:expression { Print($e) }
+case_stmt       = "case" _ scrut:or_expr "{" _ stmt_arm+ "}" _ { CaseStmt }
+stmt_arm        = pat:pattern "->" _ body:statement { StmtArm($pat, $body) }
 
-// Control flow
-control         = case_stmt / loop_stmt / "break" _
-case_stmt       = "case" _ or_expr? "{" _ stmt_arm+ "}" _
-stmt_arm        = pattern "->" _ statement
-loop_stmt       = "loop" _ statement
-print_stmt      = "print" _ expression
+binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
+                / id:ident _ ":" { Decl($id) }
 
-// Blocks
-block           = "{" _ (statement ";"? _)* expression? "}" _
+expression      = func_lit / case_expr / or_expr
+case_expr       = "case" _ scrut:or_expr "{" _ expr_arm+ "}" _ { CaseExpr }
+expr_arm        = pat:pattern "->" _ val:or_expr ","? _ { ExprArm($pat, $val) }
 
-// Bindings
-binding         = ident _ ":" ("=" _ expression)?
-                / lvalue _ ":=" _ expression
-lvalue          = ident accessor+
-accessor        = __ atom / "." _ (int_lit / ident)
+// Refactored to avoid backtracking: use left-factored rules
+or_expr         = and_expr or_tail*
+or_tail         = "||" _ and_expr { Or }
+and_expr        = not_expr and_tail*
+and_tail        = "&&" _ not_expr { And }
+not_expr        = "!" _ e:cmp_expr { Not($e) }
+                / cmp_expr
 
-// Unified expression grammar
-expression      = or_expr
-case_expr       = "case" _ or_expr? "{" _ expr_arm+ "}" _
-expr_arm        = pattern "->" _ or_expr ("," _)?
+cmp_expr        = sum_expr cmp_tail?
+cmp_tail        = "==" _ r:sum_expr { Eq }
+                / "!=" _ r:sum_expr { Ne }
+                / "<=" _ r:sum_expr { Le }
+                / ">=" _ r:sum_expr { Ge }
+                / "<" _ r:sum_expr { Lt }
+                / ">" _ r:sum_expr { Gt }
 
-// 𝔹 operations
-or_expr         = and_expr ("||" _ and_expr)*
-and_expr        = not_expr ("&&" _ not_expr)*
-not_expr        = ("!" _)? cmp_expr
+sum_expr        = product sum_tail*
+sum_tail        = "+" _ product { Add }
+                / "-" _ product { Sub }
+product         = unary product_tail*
+product_tail    = "*" _ unary { Mul }
+                / "/" _ unary { Div }
+                / "%" _ unary { Mod }
+unary           = "-" _ e:apply_expr { Neg($e) }
+                / apply_expr
 
-// Type bridge
-cmp_expr        = sum_expr (relop sum_expr)?
-relop           = ("==" / "!=" / "<=" / ">=" / "<" / ">") _
+// Application, indexing, and field access
+// Note: atom_raw doesn't consume trailing whitespace, apply_tail handles it
+apply_expr      = atom_raw apply_tail* _
+apply_tail      = _ "." _ idx:int_lit_raw { DotIndex($idx) }
+                / _ "." _ fld:ident_raw { DotField($fld) }
+                / __ arg:atom_raw { Apply($arg) }
 
-// ℤ operations
-sum_expr        = product (("+" / "-") _ product)*
-product         = unary (("*" / "/" / "%") _ unary)*
-unary           = "-"? apply_expr
+atom_raw        = int_lit_raw / bool_lit_raw / paren_expr / record_expr / id:ident_raw { Var($id) } / block
 
-// Application: juxtaposition or dot
-apply_expr      = atom (__ atom / "." _ (int_lit / ident))*
-tuple_items     = expression ("," _ expression)* ("," _)?
-array_items     = (expression ";" _)+
+// Parenthesized: array literal, unit, or grouped expression.
+// An array needs at least one ";": "(a)" is grouping, "(a;)" a 1-element array.
+// No trailing whitespace: paren_expr is used in atom_raw, and consuming the
+// space after ")" would detach following application arguments (f (3) (5)).
+paren_expr      = "(" _ ")" { Unit }
+                / "(" _ array_items ")" { Array }
+                / "(" _ e:expression ")" { $e }
+array_items     = expression (";" _ expression)+ ";"? _
+                / expression ";" _
 
-atom            = literal / ident / paren_expr / record_expr / block / case_expr
+// Records: {x: 1, y: 2}. A record needs at least one field; "{ }" is a block.
+record_expr     = "{" _ record_fields "}" { Record }
+record_fields   = field_init ("," _ field_init)* ","? _
+field_init      = fld:ident _ ":" _ e:expression { FieldInit($fld, $e) }
 
-paren_expr      = "(" _ (array_items / tuple_items)? _ ")" _
-record_expr     = "{" _ record_fields? "}" _
-record_fields   = field_init ("," _ field_init)* ("," _)?
-field_init      = ident _ ":" _ expression
+int_lit_raw     = digit+ { Int($0) }
+int_lit         = digit+ _ { Int($0) }
+bool_lit_raw    = "true" !idchar { True }
+                / "false" !idchar { False }
+func_lit        = "\\" _ p:params? "->" _ body:expression { Func($p, $body) }
+params          = ident _ ("," _ ident _)* ","? _ { Params }
 
-// Literals
-literal         = unit_lit / int_lit / bool_lit / func_lit
-unit_lit        = "()" _
-int_lit         = digit+ _
-bool_lit        = ("true" / "false") !idchar _
-func_lit        = "\\" _ params? "->" _ expression
-params          = ident ("," _ ident)* ("," _)?
-
-// Lexical elements
 keyword         = ("case" / "loop" / "break" / "true" / "false" / "print") !idchar
-ident           = !keyword letter idchar* _
-wildcard        = "_" !idchar _
+ident_raw       = !keyword letter idchar* { Ident($0) }
+ident           = !keyword letter idchar* _ { Ident($0) }
 idchar          = [a-zA-Z0-9_]
 letter          = [a-zA-Z]
 digit           = [0-9]
 
 // Patterns
-pattern         = wildcard
+pattern         = "_" !idchar _ { PWild }
                 / paren_pat
                 / record_pat
-                / literal
-                / ident
+                / lit:int_lit { PLit($lit) }
+                / "true" !idchar _ { PLitTrue }
+                / "false" !idchar _ { PLitFalse }
+                / id:ident { PVar($id) }
 
-paren_pat       = "(" _ (array_pat_items / pattern)? _ ")" _
-array_pat_items = (pattern ";" _)+
+paren_pat       = "(" _ ")" _ { PUnit }
+                / "(" _ array_pat_items ")" _ { PArray }
+array_pat_items = pattern (";" _ pattern)* ";"? _
 
-record_pat      = "{" _ record_pat_fields? "}" _
-record_pat_fields = field_pat ("," _ field_pat)* ("," _)?
-field_pat       = ident _ ":" _ pattern
+// Record pattern: listed fields must exist and match; extra fields in the
+// scrutinee are allowed (width subtyping style).
+record_pat      = "{" _ record_pat_fields "}" _ { PRecord }
+record_pat_fields = field_pat ("," _ field_pat)* ","? _
+field_pat       = fld:ident _ ":" _ p:pattern { PField($fld, $p) }
 
-// Whitespace and comments
 _               = ([ \t\n\r] / comment)*
 __              = [ \t]+
 comment         = "//" [^\n]* / "/*" (!"*/" .)* "*/"

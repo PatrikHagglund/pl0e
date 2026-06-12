@@ -1,46 +1,43 @@
 // Emulating e6 static typing using only e5 primitives
-// e5 has: records, unit, arrays, pattern matching
+// e5 has: records, unit, field access, record patterns (plus everything in e4)
 
 // --- e5 new: records and unit ---
 origin0 := {x: 0, y: 0}
 nothing := ()
-get_x0 :
-get_x0 := (p) -> case p {
-  {x: xv, y: _} -> xv,
-  _             -> 0
+get_x0 := \p -> case p {
+  {x: xv} -> xv,
+  _       -> 0
 }
-ox0 := get_x0 origin0
+print get_x0 origin0   // 0
+print origin0.y        // 0 (field access)
+print nothing          // ()
 
 // --- Tagged values simulate types ---
-make_int :
-make_int := (n) -> {tag: 0, val: n}
+make_int := \n -> {tag: 0, val: n}
+make_bool := \b -> {tag: 1, val: b}
 
-make_bool :
-make_bool := (b) -> {tag: 1, val: b}
-
-expect_int :
-expect_int := (v) -> case v {
+expect_int := \v -> case v {
   {tag: 0, val: n} -> n,
-  _               -> 0
+  _                -> 0
 }
 
-// --- "Typed" addition ---
-add_int :
-add_int := (a, b) -> make_int ((expect_int a) + (expect_int b))
+// --- "Typed" addition (curried, e3-style application) ---
+add_int := \a, b -> make_int ((expect_int a) + (expect_int b))
 
 x := make_int 10
 y := make_int 20
-z := add_int (x, y)  // {tag:0, val:30}
+z := add_int (x) (y)
+print z.val            // 30
 
 // --- Typed record with field checks ---
-make_point :
-make_point := (xv, yv) -> {tag: 2, x: xv, y: yv}
+make_point := \xv, yv -> {tag: 2, x: xv, y: yv}
 
-get_x :
-get_x := (p) -> case p {
-  {tag: 2, x: xv, y: _} -> xv,
-  _                    -> make_int 0
+get_x := \p -> case p {
+  {tag: 2, x: xv} -> xv,
+  _               -> make_int 0
 }
 
-origin := make_point (make_int 0, make_int 0)
+origin := make_point (make_int 0) (make_int 0)
 origin_x := get_x origin
+print origin_x.val     // 0
+print origin_x         // {tag: 0, val: 0}

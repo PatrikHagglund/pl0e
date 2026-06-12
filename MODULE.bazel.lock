@@ -245,14 +245,14 @@
     },
     "@@rules_koka+//:extensions.bzl%koka_ext": {
       "general": {
-        "bzlTransitiveDigest": "ASs4oAVj8AlYruGGd2Gl8eZ92EqEQyleUzOtkukogFI=",
+        "bzlTransitiveDigest": "lQN4E9fLq9fPc1/J5cbtK1HA0zTCXElgVaweVmwjZCY=",
         "usagesDigest": "hSrwouaNqiLAIy9zE6dv8jlth9dXoJefT3kjK/+p+do=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
           "koka": {
             "repoRuleId": "@@rules_koka+//koka/private:repo.bzl%_koka_repo",
             "attributes": {
-              "version": "3.2.2"
+              "version": "3.2.3"
             }
           }
         }

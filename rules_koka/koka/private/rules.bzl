@@ -128,7 +128,7 @@ $KOKA -o "$EXECROOT/{out}" "{main}"
     )]
 
 _COMMON_ATTRS = {
-    "srcs": attr.label_list(allow_files = [".koka"]),
+    "srcs": attr.label_list(allow_files = [".kk", ".koka"]),
     "deps": attr.label_list(providers = [[KokaInfo]]),
 }
 
@@ -164,7 +164,7 @@ koka_library = rule(
 koka_binary = rule(
     implementation = _koka_binary_impl,
     attrs = dict(_COMMON_ATTRS, **dict(_TOOLCHAIN_ATTRS, **{
-        "main": attr.label(allow_single_file = [".koka"], mandatory = True),
+        "main": attr.label(allow_single_file = [".kk", ".koka"], mandatory = True),
         "data": attr.label_list(allow_files = True),
         "koka_opts": attr.string_list(
             doc = "Extra options passed to the koka compiler (after -O3).",

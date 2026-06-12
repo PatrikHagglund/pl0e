@@ -6,11 +6,11 @@ Interpreters and compilers for e0–e4.
 
 | Implementation | Language | Type | Level | Integer Support |
 |----------------|----------|------|-------|-----------------|
-| `e1.koka` | Koka | Interpreter | e1 | Koka bigint |
-| `e1peg.koka` | Koka | Interpreter | e1 | Koka bigint |
-| `e2peg.koka` | Koka | Interpreter | e2 | Koka bigint |
-| `e3peg.koka` | Koka | Interpreter | e3 | Koka bigint |
-| `e4peg.koka` | Koka | Interpreter | e4 | Koka bigint |
+| `e1.kk` | Koka | Interpreter | e1 | Koka bigint |
+| `e1peg.kk` | Koka | Interpreter | e1 | Koka bigint |
+| `e2peg.kk` | Koka | Interpreter | e2 | Koka bigint |
+| `e3peg.kk` | Koka | Interpreter | e3 | Koka bigint |
+| `e4peg.kk` | Koka | Interpreter | e4 | Koka bigint |
 | `e1.cpp` | C++ | Interpreter | e1 | Configurable |
 | `e1_compile.cpp` | C++ | Compiler | e1 | Configurable |
 
@@ -20,35 +20,35 @@ Interpreters and compilers for e0–e4.
 
 ### Koka Interpreters
 
-**`e1.koka` — Two-Phase:**
+**`e1.kk` — Two-Phase:**
 Traditional parse-then-execute with AST.
 
 ```bash
 bazel run //src:e1_koka -- examples/factorial.e1
 ```
 
-**`e1peg.koka` — Single-Phase (e1):**
-No AST — semantic actions during parsing produce thunks. Uses shared `pegeval.koka` runtime.
+**`e1peg.kk` — Single-Phase (e1):**
+No AST — semantic actions during parsing produce thunks. Uses shared `pegeval.kk` runtime.
 
 ```bash
 bazel run //src:e1peg -- examples/factorial.e1
 ```
 
-**`e2peg.koka` — Single-Phase (e2):**
+**`e2peg.kk` — Single-Phase (e2):**
 Extends e1peg with case statements, comparisons, and multiplication/division.
 
 ```bash
 bazel run //src:e2peg -- examples/factorial.e2
 ```
 
-**`e3peg.koka` — Single-Phase (e3):**
-Extends e2 with booleans, closures, and case expressions. Uses a separate interpreter (not `pegeval.koka`) with its own AST types for `rval` (int/bool/closure).
+**`e3peg.kk` — Single-Phase (e3):**
+Extends e2 with booleans, closures, and case expressions. Uses a separate interpreter (not `pegeval.kk`) with its own AST types for `rval` (int/bool/closure).
 
 ```bash
 bazel run //src:e3peg -- examples/factorial.e3
 ```
 
-**`e4peg.koka` — Single-Phase (e4):**
+**`e4peg.kk` — Single-Phase (e4):**
 Extends e3 with arrays and pattern matching. Arrays are stored as Koka vectors for O(1) indexed access. Pattern matching supports exact-length array patterns `(a; b;)` and prefix patterns `(a; b; _)`.
 
 ```bash
@@ -62,7 +62,7 @@ bazel run //src:e4peg -- examples/factorial.e4
 - Support recursion via late-binding or Y-combinator
 - Consider requiring explicit grouping for inline actions in PEG grammars (see `ACTION_SCOPE_RECOMMENDATION.md` in parent directory)
 
-**`pegeval.koka` — Shared Runtime:**
+**`pegeval.kk` — Shared Runtime:**
 Parameterized `semval<x>` type allows level-specific extensions while sharing:
 - Environment operations (`env-get`, `env-set`)
 - Loop control (`loop-break` effect, `exec-loop`)
@@ -211,14 +211,14 @@ src/
   e1_preamble.hpp  — Runtime preambles (macros for both backends)
   e1_bigint.hpp    — Bigint implementation
   e1_rt_bigint.cpp — LLVM runtime wrappers
-  e1.koka          — Koka interpreter (e1)
-  e1peg.koka       — Koka PEG interpreter (e1, ~20 lines)
-  e2peg.koka       — Koka PEG interpreter (e2, ~50 lines)
-  e3peg.koka       — Koka PEG interpreter (e3, closures/booleans)
-  e4peg.koka       — Koka PEG interpreter (e4, arrays/pattern matching)
-  e0peg.koka       — Koka PEG interpreter (e0, ~20 lines)
-  pegeval.koka     — Shared PEG interpreter runtime
-  peg.koka         — Generic PEG parser
+  e1.kk          — Koka interpreter (e1)
+  e1peg.kk       — Koka PEG interpreter (e1, ~20 lines)
+  e2peg.kk       — Koka PEG interpreter (e2, ~50 lines)
+  e3peg.kk       — Koka PEG interpreter (e3, closures/booleans)
+  e4peg.kk       — Koka PEG interpreter (e4, arrays/pattern matching)
+  e0peg.kk       — Koka PEG interpreter (e0, ~20 lines)
+  pegeval.kk     — Shared PEG interpreter runtime
+  peg.kk         — Generic PEG parser
 ```
 
 ## Code Style

@@ -73,13 +73,13 @@ Each level is almost a strict superset of the previous — the deliberate deviat
 
 | Approach | Files | Notes |
 |----------|-------|-------|
-| Koka (hand-written parser) | `e1.koka` | AST used|
-| Koka (PEG meta-interpreter) | `peg.koka`, `e1peg.koka` | Single-phase parse+execute, no AST |
-| Koka (PEG, e2) | `peg.koka`, `e2peg.koka` | e2 with case/comparisons/mul-div |
-| Koka (PEG, e3) | `peg.koka`, `e3peg.koka` | e3 with booleans/closures |
-| Koka (PEG, e4) | `peg.koka`, `e4peg.koka` | e4 with arrays/pattern matching |
-| Koka (PEG, e5) | `peg.koka`, `e5peg.koka` | e5 with records/unit/field access |
-| Koka (PEG, e6) | `peg.koka`, `e6peg.koka` | e6 with static type checking before execution |
+| Koka (hand-written parser) | `e1.kk` | AST used|
+| Koka (PEG meta-interpreter) | `peg.kk`, `e1peg.kk` | Single-phase parse+execute, no AST |
+| Koka (PEG, e2) | `peg.kk`, `e2peg.kk` | e2 with case/comparisons/mul-div |
+| Koka (PEG, e3) | `peg.kk`, `e3peg.kk` | e3 with booleans/closures |
+| Koka (PEG, e4) | `peg.kk`, `e4peg.kk` | e4 with arrays/pattern matching |
+| Koka (PEG, e5) | `peg.kk`, `e5peg.kk` | e5 with records/unit/field access |
+| Koka (PEG, e6) | `peg.kk`, `e6peg.kk` | e6 with static type checking before execution |
 | C++ interpreter | `e1.cpp`, `e1.hpp` | Handwritten, AST used |
 | Compiler in C++ | `e1_compile.cpp`, `e1.hpp` | C++ or LLVM IR backend |
 

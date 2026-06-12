@@ -4,29 +4,29 @@ load("@rules_koka//koka:defs.bzl", "koka_binary", "koka_library")
 # Shared libraries
 koka_library(
     name = "peg_lib",
-    srcs = ["peg.koka"],
+    srcs = ["peg.kk"],
     visibility = ["//test:__pkg__"],
 )
 
 koka_library(
     name = "pegeval_lib",
-    srcs = ["pegeval.koka"],
+    srcs = ["pegeval.kk"],
     deps = [":peg_lib"],
 )
 
 # Koka PEG interpreters
 koka_binary(
     name = "e0peg",
-    main = "e0peg.koka",
-    srcs = ["e0peg.koka"],
+    main = "e0peg.kk",
+    srcs = ["e0peg.kk"],
     deps = [":peg_lib", ":pegeval_lib"],
     visibility = ["//visibility:public"],
 )
 
 koka_binary(
     name = "e1peg",
-    main = "e1peg.koka",
-    srcs = ["e1peg.koka"],
+    main = "e1peg.kk",
+    srcs = ["e1peg.kk"],
     deps = [":peg_lib", ":pegeval_lib"],
     data = ["e1.peg"],
     visibility = ["//visibility:public"],
@@ -34,8 +34,8 @@ koka_binary(
 
 koka_binary(
     name = "e2peg",
-    main = "e2peg.koka",
-    srcs = ["e2peg.koka"],
+    main = "e2peg.kk",
+    srcs = ["e2peg.kk"],
     deps = [":peg_lib", ":pegeval_lib"],
     data = ["e2.peg"],
     visibility = ["//visibility:public"],
@@ -43,8 +43,8 @@ koka_binary(
 
 koka_binary(
     name = "e3peg",
-    main = "e3peg.koka",
-    srcs = ["e3peg.koka"],
+    main = "e3peg.kk",
+    srcs = ["e3peg.kk"],
     deps = [":peg_lib"],
     data = ["e3.peg"],
     visibility = ["//visibility:public"],
@@ -52,8 +52,8 @@ koka_binary(
 
 koka_binary(
     name = "e4peg",
-    main = "e4peg.koka",
-    srcs = ["e4peg.koka"],
+    main = "e4peg.kk",
+    srcs = ["e4peg.kk"],
     deps = [":peg_lib"],
     data = ["e4.peg"],
     visibility = ["//visibility:public"],
@@ -61,8 +61,8 @@ koka_binary(
 
 koka_binary(
     name = "e5peg",
-    main = "e5peg.koka",
-    srcs = ["e5peg.koka"],
+    main = "e5peg.kk",
+    srcs = ["e5peg.kk"],
     deps = [":peg_lib"],
     data = ["e5.peg"],
     visibility = ["//visibility:public"],
@@ -70,8 +70,8 @@ koka_binary(
 
 koka_binary(
     name = "e6peg",
-    main = "e6peg.koka",
-    srcs = ["e6peg.koka"],
+    main = "e6peg.kk",
+    srcs = ["e6peg.kk"],
     deps = [":peg_lib"],
     data = ["e6.peg"],
     visibility = ["//visibility:public"],
@@ -80,24 +80,24 @@ koka_binary(
 # Hand-written Koka interpreter (two-phase: parse to AST, then evaluate)
 koka_library(
     name = "e1_koka_lib",
-    srcs = ["e1-types.koka", "e1-parser.koka", "e1-eval.koka"],
+    srcs = ["e1-types.kk", "e1-parser.kk", "e1-eval.kk"],
 )
 
 koka_binary(
     name = "e1_koka",
-    main = "e1.koka",
-    srcs = ["e1.koka"],
+    main = "e1.kk",
+    srcs = ["e1.kk"],
     deps = [":e1_koka_lib"],
     visibility = ["//visibility:public"],
 )
 
 # Random e1-e4 program generator for differential fuzzing (docs/FUZZING.md).
-# --fno-specialize: the Koka 3.2.2 specializer loops (dumping core to stderr
+# --fno-specialize: the Koka 3.2.x specializer loops (dumping core to stderr
 # for tens of minutes) on the effect-polymorphic co-evaluator at -O1+.
 koka_binary(
     name = "efuzz",
-    main = "efuzz.koka",
-    srcs = ["efuzz.koka"],
+    main = "efuzz.kk",
+    srcs = ["efuzz.kk"],
     koka_opts = ["--fno-specialize"],
     visibility = ["//visibility:public"],
 )
@@ -106,7 +106,7 @@ koka_binary(
 exports_files(glob(["*.peg"]))
 
 # Export Koka files for tests
-exports_files(["peg.koka"], visibility = ["//test:__pkg__"])
+exports_files(["peg.kk"], visibility = ["//test:__pkg__"])
 
 # Export C++ source files for bench_intbits
 exports_files(

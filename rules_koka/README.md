@@ -10,7 +10,7 @@ Add to your `MODULE.bazel`:
 bazel_dep(name = "rules_koka", version = "0.1.0")
 
 koka_ext = use_extension("@rules_koka//:extensions.bzl", "koka_ext")
-koka_ext.toolchain()  # optional: version = "3.2.2"
+koka_ext.toolchain()  # optional: version = "3.2.3"
 use_repo(koka_ext, "koka")
 register_toolchains("@koka//:toolchain")
 ```

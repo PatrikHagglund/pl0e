@@ -1,11 +1,11 @@
 """Repository rules for Koka toolchain."""
 
-KOKA_VERSION = "3.2.2"
+KOKA_VERSION = "3.2.3"
 
 KOKA_PLATFORMS = {
     "linux-x64": {
         "url": "https://github.com/koka-lang/koka/releases/download/v{version}/koka-v{version}-linux-x64.tar.gz",
-        "sha256": "484c56fdf4c1b4b3fd1dc7711f39141f1b3892d2f93e414d1d066887e7d0b3e2",
+        "sha256": "e82a4b497f1f8791ee171d06c45293ba16432e485d645ddd9688bafa6ccde5a5",
         "exec_compat": ["@platforms//os:linux", "@platforms//cpu:x86_64"],
     },
 }

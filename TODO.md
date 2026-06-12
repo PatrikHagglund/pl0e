@@ -26,11 +26,10 @@
   fix ships in a release, bump KOKA_VERSION in rules_koka and drop the
   --fno-specialize workaround from //src:efuzz; consider upstreaming the
   fix to koka-lang/koka if not already done
-- Koka-next compatibility: koka 3.2.7-dev no longer resolves our
-  `import src/peg` against `module peg` headers (3.2.2 tolerated the
-  mismatch), so multi-module targets (PEG interpreters) do not build with
-  --config=koka-local yet. Align module headers/import paths with the
-  next Koka release's resolution rules when upgrading
+- ~~Koka-next compatibility~~ resolved: the issue was the `.koka` file
+  extension, not module headers — koka 3.2.3+ resolves imports only as
+  `.kk`. All Koka sources renamed to the official `.kk`; hermetic
+  toolchain bumped to 3.2.3; --config=koka-local now covers all targets
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Decide: e4 trailing-wildcard pattern quirk — `(_;)` matches any array
   and "exact pattern ignoring the last element" is inexpressible

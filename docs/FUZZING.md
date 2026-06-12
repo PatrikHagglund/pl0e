@@ -128,7 +128,7 @@ repo; its LLVM-specific machinery does not.
 
 ## Tool design: `efuzz`
 
-A Koka program (`src/efuzz.koka`) plus a small driver (`fuzz/e1_diff.sh`).
+A Koka program (`src/efuzz.kk`) plus a small driver (`fuzz/e1_diff.sh`).
 
 ```
 efuzz [seed] [size]        # implemented (e1 only)
@@ -240,5 +240,5 @@ e3 → {e3peg}, e4 → {e4peg}.
   simplest and sufficient since values are exact).
 - Whether the driver compares full stdout or only the final printed
   value (full stdout preferred; programs may print multiple times).
-- UNCONFIRMED: whether the Koka AST interpreter (`e1.koka`) and PEG
+- UNCONFIRMED: whether the Koka AST interpreter (`e1.kk`) and PEG
   interpreters agree on `print` formatting (verify in Phase 1).

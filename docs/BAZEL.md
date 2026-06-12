@@ -37,7 +37,7 @@ The benchmarks use the copy from `toolchains_llvm` since `lli` needs it as an ex
 ### Hermetic Koka Toolchain
 
 Koka interpreters (`koka.bzl`):
-- Downloads Koka v3.2.2 automatically
+- Downloads Koka v3.2.3 automatically
 - Creates a clang wrapper with hermetic header/library paths
 - Uses hermetic glibc/kernel headers and CRT objects
 - Compiles C code (not C++), so excludes libc++ headers

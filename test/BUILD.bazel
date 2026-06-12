@@ -21,8 +21,8 @@ sh_test(
 # Koka PEG parser tests
 koka_binary(
     name = "peg_test_bin",
-    main = "peg_test.koka",
-    srcs = ["peg_test.koka"],
+    main = "peg_test.kk",
+    srcs = ["peg_test.kk"],
     deps = ["//src:peg_lib"],
 )
 

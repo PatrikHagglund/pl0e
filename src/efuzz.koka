@@ -621,17 +621,21 @@ fun feval(e: fenv, ex: fexpr): <div,exn,viol-flag> rv
     FSub(l, r) -> RInt(feval(e, l).as-int - feval(e, r).as-int)
     FMul(l, r) -> RInt(feval(e, l).as-int * feval(e, r).as-int)
     FDiv(l, r) ->
+      // Left-to-right, like the interpreters: the violation-order marker
+      // must agree with which violation --enforce reports first.
+      val lv = feval(e, l).as-int
       val rval = feval(e, r).as-int
       if rval == 0 then
         mark-viol("div0")
         RInt(0)
-      else RInt(feval(e, l).as-int / rval)
+      else RInt(lv / rval)
     FMod(l, r) ->
+      val lv = feval(e, l).as-int
       val rval = feval(e, r).as-int
       if rval == 0 then
         mark-viol("div0")
         RInt(0)
-      else RInt(feval(e, l).as-int % rval)
+      else RInt(lv % rval)
     FCmp(op, l, r) ->
       val lv = feval(e, l)
       val rv2 = feval(e, r)

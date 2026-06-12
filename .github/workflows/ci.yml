@@ -5,12 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# Run JS-based actions on Node 24 already: GitHub forces it from 2026-06-16
+# (Node 20 deprecation), so verify under the future default now.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # ubuntu-latest images ship Bazelisk as `bazel`; install if absent
       - name: Ensure Bazelisk

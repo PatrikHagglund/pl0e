@@ -1,39 +1,27 @@
-Always read README.md at session start.
+# Agent Notes
 
-## Ledger
+Project overview, goals, and philosophy: [README.md](README.md).
+Language-design decisions and rationale: [docs/DESIGN.md](docs/DESIGN.md)
+and the specs ([docs/E1_SPEC.md](docs/E1_SPEC.md),
+[docs/E3_SPEC.md](docs/E3_SPEC.md)).
+Backlog and open questions: [TODO.md](TODO.md).
 
-Maintain a single Ledger for this workspace in
-`.agents/rules/LEDGER.md`. The ledger is the canonical session
-briefing designed to survive context compaction; do not rely on
-earlier chat text unless it’s reflected in the ledger.
+## Commands
 
-### How it works
-- At the start of every assistant turn: read `LEDGER.md`. Update it before and after the work.
-- Update `LEDGER.md` whenever any of these change: 
-  decisions, constraints/assumptions, progress state (Done/Now/Next), or
-  important tool outcomes.
-  - Only erase prior ledger content if there is a strong need; normally preserve existing facts and append or
-    minimally edit to reflect new information.
-- Also `README.md` should be read and continually updated. It contains guidance
-  for both agents and humans.
-- Keep it short and stable: facts only, no transcripts. Prefer bullets. Mark
-  uncertainty as `UNCONFIRMED` (never guess).
-- If you notice missing recall or a compaction/summary event: refresh/rebuild
-  the ledger from visible context, mark gaps `UNCONFIRMED`, ask up to 1–3
-  targeted questions, then continue.
+```bash
+bazel test //test/... //fuzz/...                 # full test suite
+bazel run //src:e1 -- examples/factorial.e1      # run an interpreter
+bazel run //fuzz:diff -- -- 100 1 30             # differential fuzzing (e1)
+bazel run //fuzz:diff_e2 -- -- 100 1 30          # differential fuzzing (e2)
+bazel run //bench:bench                          # benchmarks
+```
 
-### In replies
-- Begin with a brief “Ledger Snapshot” (Now/Next + Open
-  Questions). Print the full ledger only when it materially changes or when
-  the user asks.
+## Conventions
 
-### `LEDGER.md` format (keep headings)
-- Goal:
-- Key decisions:
-- Additional decisions/constraints/assumptions
-- Open questions (UNCONFIRMED if needed):
-- State:
-- Next:
-- Now:
-  - Working set (current focus only; replace/prune as "Now" changes):
-- Done (prune when exceeding 30 items):
+- Run the test suite before committing.
+- Durable state lives in the repo, not in chat: record language-design
+  decisions in docs/DESIGN.md or the relevant spec, keep README's feature
+  list current, and maintain TODO.md (add follow-ups, prune finished
+  items). History belongs in commit messages.
+- If parallel Koka compiles get OOM-killed on memory-constrained machines,
+  build with `--jobs=2` (CI does, via `--config=ci`).

@@ -181,8 +181,20 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    machinery bug), and a div0-marked program must halt with
    `Violation (div0)` (a missed violation is too). This tests the
    violation checking itself, not just value agreement.
-3. **Phase 3 — e3/e4.** Booleans, callables/closures (bounded depth),
-   case expressions; arrays (in-bounds), pattern matching.
+3. **Phase 3 — e3/e4.**
+   - **e3** ✅ Done (`efuzz [seed] [size] 3`, `bazel run //fuzz:diff_e3`).
+     Typed generation (int/bool/closure variables — programs are
+     well-typed by construction since type errors halt), booleans with
+     short-circuit `&&`/`||`, comparisons as first-class bool values,
+     closures (1-2 int params, capture-at-creation, applications;
+     closures never flow as arguments, so self-application — the only
+     route to divergence without loops — is impossible), and guard-style
+     case expressions, which can fail to match: the `nomatch` violation
+     kind joins `div0` in the marker and the bidirectional enforce
+     oracle. Found an efuzz printer bug via 10/300 parse failures:
+     comparison operands are `sum_expr`, so `a != !b` is ungrammatical
+     (now noted in E3_SPEC.md).
+   - **e4** — arrays (in-bounds and deliberate `oob`), pattern matching.
 4. **Phase 4 — hardening.** Mutator (semantics-preserving transforms:
    commute operands, split constants, wrap in always-true case) and
    PEG `--stats` fuel-regression mode. CI integration ✅ done:

@@ -106,6 +106,12 @@ __              = [ \t]+
 comment         = "//" [^\n]* / "/*" (!"*/" .)* "*/"
 ```
 
+Grammar notes:
+- Comparisons are non-associative (`a < b < c` is invalid; parenthesize).
+- `!` binds *looser* than comparisons: `!a == b` parses as `!(a == b)`,
+  and a negated comparison operand must be parenthesized — `a == !b` is
+  invalid, write `a == (!b)`. (Found by differential fuzzing.)
+
 ## Types
 
 | Type | Values | Operations |

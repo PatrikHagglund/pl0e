@@ -67,8 +67,8 @@ for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
             mismatches="$mismatches e3peg-enforce"
         fi
     else
-        if ! echo "$enforce_raw" | grep -q "^Violation (div0)"; then
-            mismatches="$mismatches e3peg-enforce(missed-violation)"
+        if ! echo "$enforce_raw" | grep -q "^Violation ($viol)"; then
+            mismatches="$mismatches e3peg-enforce(missed-$viol)"
         fi
     fi
 

@@ -19,10 +19,18 @@
   PEG `--stats` fuel-regression mode (first candidate: e4peg takes >10s
   on some generated programs — see docs/FUZZING.md findings)
 - Koka specializer loop: reported and fixed in ../koka (dev branch, see
-  SPECIALIZER-LOOP-REPORT.md there). Once the fix ships in a release (or
-  the hermetic toolchain points at a patched build), drop the
-  --fno-specialize workaround from //src:efuzz and re-verify at -O3;
-  consider upstreaming the fix to koka-lang/koka if not already done
+  SPECIALIZER-LOOP-REPORT.md there). Fix verified against pl0e:
+  `bazel build --config=koka-local //src:efuzz` (new NON-HERMETIC local
+  toolchain override, KOKA_LOCAL_PATH in .bazelrc) compiles at -O3 with
+  specialization in ~24s and produces byte-identical fuzz output. Once the
+  fix ships in a release, bump KOKA_VERSION in rules_koka and drop the
+  --fno-specialize workaround from //src:efuzz; consider upstreaming the
+  fix to koka-lang/koka if not already done
+- Koka-next compatibility: koka 3.2.7-dev no longer resolves our
+  `import src/peg` against `module peg` headers (3.2.2 tolerated the
+  mismatch), so multi-module targets (PEG interpreters) do not build with
+  --config=koka-local yet. Align module headers/import paths with the
+  next Koka release's resolution rules when upgrading
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Decide: e4 trailing-wildcard pattern quirk — `(_;)` matches any array
   and "exact pattern ignoring the last element" is inexpressible

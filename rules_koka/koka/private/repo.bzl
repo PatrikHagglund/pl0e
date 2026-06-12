@@ -21,6 +21,43 @@ def _koka_repo_impl(rctx):
         fail("Unsupported platform: {} {}".format(rctx.os.name, rctx.os.arch))
 
     info = KOKA_PLATFORMS[platform]
+
+    # Optional local override (NON-HERMETIC): point KOKA_LOCAL_PATH at a koka
+    # binary (e.g. a cabal/stack dev build) to test compiler fixes before
+    # they ship in a release. A dev-build binary locates its stdlib from its
+    # own source tree, so only the binary is symlinked; the stdlib is
+    # compiled on the fly per build (slower, fine for testing). Use via
+    # `--config=koka-local` (see .bazelrc).
+    local = rctx.os.environ.get("KOKA_LOCAL_PATH", "")
+    if local:
+        rctx.symlink(local, "bin/koka")
+        rctx.file("BUILD.bazel", """
+load("@rules_koka//koka:defs.bzl", "koka_toolchain")
+
+exports_files(["bin/koka"])
+
+filegroup(
+    name = "koka_files",
+    srcs = ["bin/koka"],
+    visibility = ["//visibility:public"],
+)
+
+koka_toolchain(
+    name = "toolchain_impl",
+    koka = "bin/koka",
+    koka_files = ":koka_files",
+    version = "local",
+)
+
+toolchain(
+    name = "toolchain",
+    toolchain = ":toolchain_impl",
+    toolchain_type = "@rules_koka//koka:toolchain_type",
+    exec_compatible_with = {exec_compat},
+)
+""".format(exec_compat = info["exec_compat"]))
+        return
+
     url = info["url"].format(version = rctx.attr.version)
 
     rctx.download_and_extract(url = url, sha256 = info["sha256"])
@@ -57,6 +94,7 @@ toolchain(
 _koka_repo = repository_rule(
     implementation = _koka_repo_impl,
     attrs = {"version": attr.string(default = KOKA_VERSION)},
+    environ = ["KOKA_LOCAL_PATH"],
 )
 
 def _koka_ext_impl(mctx):

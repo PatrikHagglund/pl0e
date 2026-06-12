@@ -245,7 +245,7 @@
     },
     "@@rules_koka+//:extensions.bzl%koka_ext": {
       "general": {
-        "bzlTransitiveDigest": "3md2rEP8eaav7POS3BQpim9lHkrVNWfXxWrHNleDtws=",
+        "bzlTransitiveDigest": "ASs4oAVj8AlYruGGd2Gl8eZ92EqEQyleUzOtkukogFI=",
         "usagesDigest": "hSrwouaNqiLAIy9zE6dv8jlth9dXoJefT3kjK/+p+do=",
         "recordedInputs": [],
         "generatedRepoSpecs": {

@@ -18,6 +18,11 @@ build --host_cxxopt=-Wno-vla-cxx-extension
 
 # Hermetic Koka toolchain - no system koka required
 
+# Temporarily use a locally built Koka compiler instead of the hermetic
+# release (NON-HERMETIC; for testing compiler fixes, e.g. the specializer
+# fix in ../koka). Adjust the path to your dev build:
+build:koka-local --repo_env=KOKA_LOCAL_PATH=/repo/uabpath/koka/dist-newstyle/build/x86_64-linux/ghc-9.10.3/koka-3.2.7/x/koka/build/koka/koka
+
 # CI configuration (GitHub Actions, see .github/workflows/ci.yml)
 build:ci --jobs=2                # Koka compiles are memory-hungry (OOM at high parallelism)
 build:ci --copt=-march=x86-64    # overrides -march=native: portable across runner CPU generations

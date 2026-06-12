@@ -1,5 +1,7 @@
 # PL/0 Exploration
 
+[![CI](https://github.com/PatrikHagglund/pl0e/actions/workflows/ci.yml/badge.svg)](https://github.com/PatrikHagglund/pl0e/actions/workflows/ci.yml)
+
 This project explores the design and implementation of simple programming languages, inspired by Niklaus Wirth's [PL/0](https://en.wikipedia.org/wiki/PL/0).
 
 **Current state:**

@@ -24,7 +24,6 @@ Explore simple language design/implementation inspired by PL/0.
 
 - Implement e5peg interpreter (records, unit)
 - Implement e6peg interpreter (static typing)
-- Add CI workflow (GitHub Actions)
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - Explore efficient interpreters (Graal/Truffle, simple JIT)
 - Standard library?
@@ -51,6 +50,12 @@ the 0-default and an enforcing implementation are both conforming)
 
 ## Done (prune when exceeding 20 items)
 
+- CI workflow (2026-06-12): .github/workflows/ci.yml — bazel test
+  //test/... //fuzz/... + rolling 25-seed e1/e2 fuzz campaigns (seeds from
+  run number; failures uploaded as artifacts). --config=ci in .bazelrc:
+  jobs=2 (Koka OOM), -march=x86-64 (cache-portable), disk/repo caches.
+  Commands validated locally; the workflow itself is UNCONFIRMED until
+  first push to GitHub.
 - Enforce-mode oracle in //fuzz:diff_e2 (2026-06-12): efuzz co-evaluation
   marks `// violations: none|div0`; driver asserts bidirectionally vs
   `e3peg --enforce` (clean program must not trip a violation; div0 program

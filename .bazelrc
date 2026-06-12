@@ -17,3 +17,10 @@ build --host_cxxopt=-Wno-vla-cxx-extension
 # No system compiler required - fully reproducible builds
 
 # Hermetic Koka toolchain - no system koka required
+
+# CI configuration (GitHub Actions, see .github/workflows/ci.yml)
+build:ci --jobs=2                # Koka compiles are memory-hungry (OOM at high parallelism)
+build:ci --copt=-march=x86-64    # overrides -march=native: portable across runner CPU generations
+build:ci --disk_cache=~/.cache/bazel-disk
+build:ci --repository_cache=~/.cache/bazel-repo
+test:ci --test_output=errors

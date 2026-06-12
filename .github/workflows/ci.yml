@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest images ship Bazelisk as `bazel`; install if absent
+      - name: Ensure Bazelisk
+        run: |
+          command -v bazel && exit 0
+          sudo curl -fsSL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          sudo chmod +x /usr/local/bin/bazel
+
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repo
+          key: bazel-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-
+
+      - name: Tests (interpreters, PEG, fuzz smokes)
+        run: bazel test --config=ci //test/... //fuzz/...
+
+      # Rolling differential fuzzing: fresh seeds every run, so coverage
+      # accumulates across CI history instead of re-checking one window.
+      - name: Differential fuzzing, e1 (25 fresh seeds)
+        run: bazel run --config=ci //fuzz:diff -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25
+
+      - name: Differential fuzzing, e2 (25 fresh seeds)
+        run: bazel run --config=ci //fuzz:diff_e2 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25
+
+      - name: Upload fuzz failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures
+          path: fuzz-failures/
+          if-no-files-found: ignore

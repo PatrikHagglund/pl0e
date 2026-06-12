@@ -184,9 +184,12 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
 3. **Phase 3 — e3/e4.** Booleans, callables/closures (bounded depth),
    case expressions; arrays (in-bounds), pattern matching.
 4. **Phase 4 — hardening.** Mutator (semantics-preserving transforms:
-   commute operands, split constants, wrap in always-true case),
-   PEG `--stats` fuel-regression mode, CI integration (small count per
-   push, ties into the planned GitHub Actions workflow).
+   commute operands, split constants, wrap in always-true case) and
+   PEG `--stats` fuel-regression mode. CI integration ✅ done:
+   `.github/workflows/ci.yml` runs the test suite (incl. both fuzz
+   smokes) plus rolling 25-seed e1 and e2 campaigns — seeds derive from
+   the CI run number, so coverage accumulates across runs instead of
+   re-checking one window; failing programs are uploaded as artifacts.
 5. **Later (as e5/e6 interpreters land)** — records/unit, then static
    typing. e6 adds a new oracle: well-typed-by-construction programs
    must type-check; deliberately ill-typed mutations must be rejected.

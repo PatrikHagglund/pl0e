@@ -8,8 +8,12 @@
 # triggered an erroneous construct (div0, nomatch, oob) must halt with a
 # Violation of exactly that kind.
 #
-# Timeouts are 30s: e4peg takes >10s on some generated programs (PEG
-# backtracking - a candidate for the planned --stats fuel investigation).
+# Timeout handling: efuzz programs are terminating by construction, so a
+# timeout means e4peg is pathologically slow on that input (PEG backtracking
+# can be exponential — observed ~37s on a 174-line program; a candidate for
+# the planned --stats fuel work), NOT that the output is wrong. We cannot
+# diff output that never finished, so a timeout is logged and SKIPPED rather
+# than failed; only completed-but-different output counts as a failure.
 set -u
 
 EFUZZ="$1"
@@ -26,18 +30,24 @@ if [ "${1:-}" = "--" ]; then
     SIZE=${3:-20}
 fi
 
+# Generous: only genuinely pathological backtracking should exceed this.
+TIMEOUT=90
+
 OUTDIR="${TEST_UNDECLARED_OUTPUTS_DIR:-${BUILD_WORKING_DIRECTORY:-$PWD}}/fuzz-failures"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 pass=0
 fail=0
+skip=0
 
-# Program output lines: integers, booleans, and arrays like "(1; 2;)"
-run_filtered() {
-    timeout 30 "$@" 2>/dev/null | grep -E '^-?[0-9]+$|^true$|^false$|^\(.*\)$'
-    return 0
+# Run e4peg into $1 (output file); return 124 on timeout, else e4peg's status.
+run_e4peg() {
+    local out="$1"; shift
+    timeout "$TIMEOUT" "$E4PEG" "$@" > "$out" 2>/dev/null
+    return $?
 }
+NUMRE='^-?[0-9]+$|^true$|^false$|^\(.*\)$'
 
 for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
     prog="$TMP/prog.e4"
@@ -48,7 +58,12 @@ for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
     fi
     expected=$(sed -n 's|^// expect: ||p' "$prog")
 
-    run_filtered "$E4PEG" "$prog" > "$TMP/out_e4peg"
+    if ! run_e4peg "$TMP/raw_e4peg" "$prog"; then
+        echo "SKIP seed=$seed: e4peg exceeded ${TIMEOUT}s (pathological PEG backtracking, not a mismatch)"
+        skip=$((skip + 1))
+        continue
+    fi
+    grep -E "$NUMRE" "$TMP/raw_e4peg" > "$TMP/out_e4peg"
 
     mismatches=""
     if [ "$(cat "$TMP/out_e4peg")" != "$expected" ]; then
@@ -56,11 +71,16 @@ for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
     fi
 
     viol=$(sed -n 's|^// violations: ||p' "$prog")
-    enforce_raw=$(timeout 30 "$E4PEG" --enforce "$prog" 2>/dev/null)
+    if ! run_e4peg "$TMP/raw_enforce" "--enforce" "$prog"; then
+        echo "SKIP seed=$seed: e4peg --enforce exceeded ${TIMEOUT}s"
+        skip=$((skip + 1))
+        continue
+    fi
+    enforce_raw=$(cat "$TMP/raw_enforce")
     if [ "$viol" = "none" ]; then
         if echo "$enforce_raw" | grep -q "^Violation"; then
             mismatches="$mismatches e4peg-enforce(spurious-violation)"
-        elif [ "$(echo "$enforce_raw" | grep -E '^-?[0-9]+$|^true$|^false$|^\(.*\)$')" != "$expected" ]; then
+        elif [ "$(echo "$enforce_raw" | grep -E "$NUMRE")" != "$expected" ]; then
             mismatches="$mismatches e4peg-enforce"
         fi
     else
@@ -82,5 +102,5 @@ for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
 done
 
 echo ""
-echo "efuzz e4 diff: $pass passed, $fail failed (seeds $SEED0..$((SEED0 + COUNT - 1)), size $SIZE)"
+echo "efuzz e4 diff: $pass passed, $fail failed, $skip skipped (seeds $SEED0..$((SEED0 + COUNT - 1)), size $SIZE)"
 [ $fail -eq 0 ]

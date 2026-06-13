@@ -210,8 +210,12 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
        array, and "exact pattern ignoring the last element" is
        inexpressible. The generator avoids emitting trailing `_` in
        exact patterns.
-     - **Performance:** e4peg needs >10s on some generated programs
-       (PEG backtracking) — input for the planned `--stats`
+     - **Performance:** e4peg's PEG backtracking is sometimes exponential
+       — observed ~37s on a 174-line size-20 program (CI run #21, seed
+       100528). Since efuzz programs are terminating by construction, the
+       e4 driver treats a timeout (>90s) as a logged SKIP, not a failure
+       (you cannot diff output that never finished); only completed-but-
+       different output fails. This is input for the planned `--stats`
        fuel-regression mode.
      - **Koka 3.2.2/3.2.3 specializer loop:** compiling efuzz's
        effect-polymorphic co-evaluator at `-O1`+ sends Koka's

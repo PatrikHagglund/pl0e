@@ -192,8 +192,8 @@ genrule(
     srcs = ["e1_rt_bigint.cpp", "e1_bigint.hpp"],
     outs = ["e1_rt_bigint.ll"],
     cmd = """
-        LIBCXX_HDR=$(execpath @@toolchains_llvm_bootstrapped++http_archive+libcxx//:libcxx_headers_include_search_directory)
-        LIBCXXABI_HDR=$(execpath @@toolchains_llvm_bootstrapped++http_archive+libcxxabi//:libcxxabi_headers_include_search_directory)
+        LIBCXX_HDR=$(execpath @toolchains_llvm_bootstrapped//runtimes/libcxx:libcxx_headers_include_search_directory)
+        LIBCXXABI_HDR=$(execpath @toolchains_llvm_bootstrapped//runtimes/libcxx:libcxxabi_headers_include_search_directory)
         GLIBC_HDR=$(execpath @toolchains_llvm_bootstrapped//runtimes/glibc:glibc_headers_include_search_directory)
         KERNEL_HDR=$(execpath @@toolchains_llvm_bootstrapped++kernel_headers+kernel_headers//:kernel_headers_directory)
         $(execpath @toolchains_llvm_bootstrapped//tools:clang) -x c++ -std=c++26 \
@@ -206,8 +206,8 @@ genrule(
     """,
     tools = [
         "@toolchains_llvm_bootstrapped//tools:clang",
-        "@@toolchains_llvm_bootstrapped++http_archive+libcxx//:libcxx_headers_include_search_directory",
-        "@@toolchains_llvm_bootstrapped++http_archive+libcxxabi//:libcxxabi_headers_include_search_directory",
+        "@toolchains_llvm_bootstrapped//runtimes/libcxx:libcxx_headers_include_search_directory",
+        "@toolchains_llvm_bootstrapped//runtimes/libcxx:libcxxabi_headers_include_search_directory",
         "@toolchains_llvm_bootstrapped//runtimes/glibc:glibc_headers_include_search_directory",
         "@@toolchains_llvm_bootstrapped++kernel_headers+kernel_headers//:kernel_headers_directory",
     ],

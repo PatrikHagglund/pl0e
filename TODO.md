@@ -53,12 +53,25 @@
     LARGE ones (e5peg: 3m40s cold -> 3m32s warm) the target's own module
     dominates, so only ~8s. Across 10 targets ≈ ~100s absolute off a clean
     build. Does NOT touch the dominant cold-CI cost (libc++ from source).
-  - Plan if pursued: (1) generate the clang wrapper at a stable path with
-    a fixed basename (toolchain dirs via env, not baked); (2) add
-    `--no-buildhash`; (3) a koka_stdlib action prebuilds the stdlib into a
-    builddir TreeArtifact; (4) koka_binary copies it in and compiles only
-    user modules. No Koka patch needed. Medium-risk rules_koka rewrite for
-    a modest win — best for local iteration, low value for CI.
+  - IMPLEMENTED and MEASURED (2026-06-13), then reverted. A koka_stdlib
+    rule (prebuilt stdlib builddir TreeArtifact, --no-buildhash, fixed
+    wrapper basename) seeded into each koka_binary worked correctly
+    (binaries ran, stdlib provably reused). But measured benefit is too
+    small to justify the complexity: with a WARM toolchain, e2peg was
+    3m0s with reuse vs 3m6s without — the stdlib is only ~15s (~8%) of a
+    target. The dominant cost is compiling the interpreter's OWN modules
+    (peg + pegeval + level module) at -O3 + clang -O3 on the generated C.
+    Under Bazel parallelism across 9 targets the ~15s/target saving is
+    nearly invisible in wall-clock; and it does not touch the dominant
+    cold-CI cost (libc++ from source). One real gotcha found: the copied
+    TreeArtifact is read-only, needs `chmod -R u+w` before Koka writes
+    user modules.
+  - BIGGER redundancy worth more (future): peg.kk + pegeval.kk are
+    recompiled per dependent (8 PEG interpreters each rebuild them as
+    --library) — likely a larger share of the 3min than the stdlib. A
+    koka_library producing a reusable compiled-library builddir artifact
+    (same seeding mechanism) would help more, but is a bigger rules_koka
+    change. Measure peg+pegeval vs total before pursuing.
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - rules_cc pinned at 0.2.16 (latest compatible): 0.2.17+ removed targets
   toolchains_llvm_bootstrapped 0.5.9 still references. Bump it when the

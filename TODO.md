@@ -30,6 +30,25 @@
   extension, not module headers — koka 3.2.3+ resolves imports only as
   `.kk`. All Koka sources renamed to the official `.kk`; hermetic
   toolchain bumped to 3.2.3; --config=koka-local now covers all targets
+- Make rules_koka more bazel-native (stdlib recompiled per action). Each
+  koka_binary action recompiles ~25 stdlib modules (~10s; 10 koka targets
+  => ~100s redundant per clean build) because it runs in a fresh mktemp
+  builddir. Investigation (2026-06-13):
+  - Shipped distro has a precompiled stdlib (lib/koka/<ver>/gcc-release/,
+    165 .kki + 168 .o) but our hermetic clang `--cc` + -O3 yields a
+    different variant (`<cc>-drelease-<hash>`), so it is not reused.
+  - A shared, WRITABLE --builddir reuses the stdlib: 13.7s cold -> 1.5s
+    warm (~9x). A read-only --libdir does NOT (recompiles anyway).
+  - Blocker: the variant hash embeds the full `--cc` path. Same wrapper
+    basename + byte-identical content in different dirs => different hash
+    => no reuse. Bazel's per-action mktemp sandboxes guarantee mismatch.
+  - Plan: (1) make the clang wrapper a tracked file at a stable
+    execroot-relative path (toolchain dirs passed via env, not baked), so
+    every action passes an identical `--cc` string; (2) a koka_stdlib
+    action prebuilds the stdlib into a builddir TreeArtifact; (3)
+    koka_binary copies that in (cheap) and compiles only user modules.
+    Medium-risk rules_koka rewrite; current build is green, so do it
+    behind verification.
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - rules_cc pinned at 0.2.16 (latest compatible): 0.2.17+ removed targets
   toolchains_llvm_bootstrapped 0.5.9 still references. Bump it when the

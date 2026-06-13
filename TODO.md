@@ -31,6 +31,9 @@
   `.kk`. All Koka sources renamed to the official `.kk`; hermetic
   toolchain bumped to 3.2.3; --config=koka-local now covers all targets
 - Restructure directories by language level (e0/, e1/, ... + shared/)
+- rules_cc pinned at 0.2.16 (latest compatible): 0.2.17+ removed targets
+  toolchains_llvm_bootstrapped 0.5.9 still references. Bump it when the
+  bootstrapped toolchain bumps its own rules_cc dependency.
 - Decide: e4 trailing-wildcard pattern quirk — `(_;)` matches any array
   and "exact pattern ignoring the last element" is inexpressible
   (docs/FUZZING.md findings); fine as-is or change pattern syntax?

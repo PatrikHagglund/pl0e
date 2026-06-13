@@ -13,6 +13,13 @@ build --copt=-march=native
 build --host_cxxopt=-std=gnu++26
 build --host_cxxopt=-Wno-vla-cxx-extension
 
+# rules_cc's static_libgcc feature appends -static-libgcc to link steps when
+# C++ runtimes are statically linked, but the hermetic LLVM toolchain uses
+# compiler-rt (no libgcc), so the flag is inert and clang++ warns it is
+# unused. Disable the feature (target + exec config) to drop the dead flag.
+build --features=-static_libgcc
+build --host_features=-static_libgcc
+
 # Hermetic LLVM toolchain provided by toolchains_llvm_bootstrapped
 # No system compiler required - fully reproducible builds
 

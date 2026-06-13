@@ -16,8 +16,15 @@
 - efuzz Phase 3c: extend the generator to e5 (records in the value domain,
   record patterns, field access; `nofield` as a violation kind candidate)
 - efuzz Phase 4: mutator (semantics-preserving transforms), reducer,
-  PEG `--stats` fuel-regression mode (first candidate: e4peg takes >10s
-  on some generated programs — see docs/FUZZING.md findings)
+  PEG `--stats` fuel-regression mode. (The original first candidate —
+  e4peg's exponential paren backtracking — is now FIXED by left-factoring
+  paren_expr; see docs/FUZZING.md.)
+- PEG engine: the action-executing path (peg-exec-*) is NOT memoized
+  (only the action-less matcher is), so overlapping-FIRST rules re-parse
+  on backtrack. Left-factoring paren_expr fixed the one exponential case;
+  a general fix would be packrat memoization of the exec path (parsing is
+  side-effect-free here — actions build closures, side effects run at
+  exec time — so memoizing parse results should be safe). Bigger change.
 - Koka specializer loop: reported and fixed in ../koka (dev branch, see
   SPECIALIZER-LOOP-REPORT.md there). Fix verified against pl0e:
   `bazel build --config=koka-local //src:efuzz` (new NON-HERMETIC local

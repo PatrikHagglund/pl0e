@@ -59,6 +59,7 @@ pub type semval
   SVStmtArm(pat: pattern, body: stmt)
   SVBinopTail(op: string, rhs: expr)
   SVIndex(idx: int)
+  SVArr(elems: list<expr>)  // array tail of a paren_expr (the elements after the first)
 
 fun env-get(e: e4env, key: string): rval
   match e.filter(fn(p) p.fst == key)
@@ -355,9 +356,13 @@ fun e4-action(name: string, txt: string, children: list<semval>, caps: captures<
       val params = get-params(cs.init)
       match cs.last { Just(SVExpr(body)) -> SVExpr(EFunc(params, body)); _ -> SVList(cs) }
     "Unit" -> SVExpr(EVal(VArray([].vector)))
-    "Array" ->
-      val exprs = flatten-sv(cs).filter-map(sv-to-expr)
-      SVExpr(EArray(exprs))
+    "ArrTail" -> SVArr(flatten-sv(cs).filter-map(sv-to-expr))
+    "Paren" -> match cs
+      // first expression followed by an array tail -> array literal
+      Cons(SVExpr(e), Cons(SVArr(rest), _)) -> SVExpr(EArray(Cons(e, rest)))
+      // first expression with no tail -> grouping
+      Cons(SVExpr(e), _) -> SVExpr(e)
+      _ -> SVList(cs)
     "DotIndex" -> match cs
       Cons(SVExpr(EVal(VInt(idx))), _) -> SVIndex(idx)
       _ -> SVList(cs)

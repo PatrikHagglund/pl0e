@@ -81,6 +81,7 @@ pub type semval
   SVFieldSel(fld: string)
   SVField(fld: string, e: expr)
   SVPatField(fld: string, p: pattern)
+  SVArr(elems: list<expr>)  // array tail of a paren_expr (elements after the first)
   SVType(t: ty)
   SVTField(fld: string, t: ty)
   SVParam(name: string, t: ty)
@@ -439,9 +440,11 @@ fun e6-action(name: string, txt: string, children: list<semval>, caps: captures<
         match v { SVParam(n, t) -> Just((n, t)); _ -> Nothing }
       match cs.last { Just(SVExpr(body)) -> SVExpr(EFunc(params, body)); _ -> SVList(cs) }
     "Unit" -> SVExpr(EVal(VArray([].vector)))
-    "Array" ->
-      val exprs = flatten-sv(cs).filter-map(sv-to-expr)
-      SVExpr(EArray(exprs))
+    "ArrTail" -> SVArr(flatten-sv(cs).filter-map(sv-to-expr))
+    "Paren" -> match cs
+      Cons(SVExpr(e), Cons(SVArr(rest), _)) -> SVExpr(EArray(Cons(e, rest)))
+      Cons(SVExpr(e), _) -> SVExpr(e)
+      _ -> SVList(cs)
     "DotIndex" -> match cs
       Cons(SVExpr(EVal(VInt(idx))), _) -> SVIndex(idx)
       _ -> SVList(cs)

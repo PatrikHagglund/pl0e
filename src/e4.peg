@@ -51,15 +51,18 @@ apply_tail      = _ "." _ idx:int_lit_raw { DotIndex($idx) }
 
 atom_raw        = int_lit_raw / bool_lit_raw / paren_expr / id:ident_raw { Var($id) } / block
 
-// Parenthesized: array literal, unit, or grouped expression.
+// Parenthesized: unit, array literal, or grouped expression.
 // An array needs at least one ";": "(a)" is grouping, "(a;)" a 1-element array.
+// Left-factored: the first expression is parsed once, then an optional array
+// tail decides array-vs-grouping. (The earlier 3-alternative form re-parsed
+// the inner expression up to 3x per paren level -> exponential blowup on the
+// deeply-parenthesized expressions efuzz emits, since the action-executing
+// PEG path is not memoized.)
 // No trailing whitespace: paren_expr is used in atom_raw, and consuming the
 // space after ")" would detach following application arguments (f (3) (5)).
 paren_expr      = "(" _ ")" { Unit }
-                / "(" _ array_items ")" { Array }
-                / "(" _ e:expression ")" { $e }
-array_items     = expression (";" _ expression)+ ";"? _
-                / expression ";" _
+                / "(" _ e:expression t:arr_tail? ")" { Paren }
+arr_tail        = ";" _ (expression ";" _)* expression? _ { ArrTail }
 
 int_lit_raw     = digit+ { Int($0) }
 int_lit         = digit+ _ { Int($0) }

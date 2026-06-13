@@ -210,13 +210,19 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
        array, and "exact pattern ignoring the last element" is
        inexpressible. The generator avoids emitting trailing `_` in
        exact patterns.
-     - **Performance:** e4peg's PEG backtracking is sometimes exponential
-       — observed ~37s on a 174-line size-20 program (CI run #21, seed
-       100528). Since efuzz programs are terminating by construction, the
-       e4 driver treats a timeout (>90s) as a logged SKIP, not a failure
-       (you cannot diff output that never finished); only completed-but-
-       different output fails. This is input for the planned `--stats`
-       fuel-regression mode.
+     - **Performance (fixed):** e4peg showed exponential PEG backtracking
+       — ~37s on a 174-line size-20 program (CI run #21, seed 100528).
+       Root cause: the action-executing PEG path (`peg-exec-*`) is not
+       memoized, and `paren_expr`'s three alternatives (unit / array /
+       grouped) each re-parsed the inner expression, so a paren nested k
+       deep was parsed 3^k times. Fixed by left-factoring `paren_expr` to
+       parse the inner expression once with an optional array tail (e4/e5/
+       e6 grammars + their `Paren`/`ArrTail` actions): seed 100528 dropped
+       37s -> 117ms, and 100 size-30 seeds run in ~24s with 0 skips.
+       Belt-and-suspenders: the e4 driver still treats a >90s timeout as a
+       logged SKIP (not a failure), since efuzz programs are terminating by
+       construction and output that never finished cannot be diffed.
+       (General exec-path memoization remains future work — see TODO.)
      - **Koka 3.2.2/3.2.3 specializer loop:** compiling efuzz's
        effect-polymorphic co-evaluator at `-O1`+ sends Koka's
        specializer into a core-dumping loop (hundreds of MB of

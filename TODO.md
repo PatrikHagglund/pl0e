@@ -39,16 +39,26 @@
     different variant (`<cc>-drelease-<hash>`), so it is not reused.
   - A shared, WRITABLE --builddir reuses the stdlib: 13.7s cold -> 1.5s
     warm (~9x). A read-only --libdir does NOT (recompiles anyway).
-  - Blocker: the variant hash embeds the full `--cc` path. Same wrapper
-    basename + byte-identical content in different dirs => different hash
-    => no reuse. Bazel's per-action mktemp sandboxes guarantee mismatch.
-  - Plan: (1) make the clang wrapper a tracked file at a stable
-    execroot-relative path (toolchain dirs passed via env, not baked), so
-    every action passes an identical `--cc` string; (2) a koka_stdlib
-    action prebuilds the stdlib into a builddir TreeArtifact; (3)
-    koka_binary copies that in (cheap) and compiles only user modules.
-    Medium-risk rules_koka rewrite; current build is green, so do it
-    behind verification.
+  - Blocker WAS thought to be: the variant hash embeds the full `--cc`
+    path (confirmed: same basename + content in different dirs => diff
+    hash). BUT prototype (../koka + /tmp, 2026-06-13) found NO compiler
+    change is needed: `--no-buildhash` drops the hash so the variant is
+    just `<ccName>-<buildtype>`, and ccName is the cc *basename* — stable
+    across dirs. Verified: build A populates SHARED builddir; build B with
+    a DIFFERENT cc dir (same basename) + --no-buildhash reuses the stdlib
+    (13.7s -> 1.5s). Real multi-module proto (peg+pegeval+e5peg) builds
+    correctly reusing a copied-in prebuilt stdlib.
+  - Refined payoff (release koka, -O3): stdlib reuse saves ~10-14s/target.
+    For SMALL targets (e0/e1peg, efuzz) that's most of the build; for
+    LARGE ones (e5peg: 3m40s cold -> 3m32s warm) the target's own module
+    dominates, so only ~8s. Across 10 targets ≈ ~100s absolute off a clean
+    build. Does NOT touch the dominant cold-CI cost (libc++ from source).
+  - Plan if pursued: (1) generate the clang wrapper at a stable path with
+    a fixed basename (toolchain dirs via env, not baked); (2) add
+    `--no-buildhash`; (3) a koka_stdlib action prebuilds the stdlib into a
+    builddir TreeArtifact; (4) koka_binary copies it in and compiles only
+    user modules. No Koka patch needed. Medium-risk rules_koka rewrite for
+    a modest win — best for local iteration, low value for CI.
 - Restructure directories by language level (e0/, e1/, ... + shared/)
 - rules_cc pinned at 0.2.16 (latest compatible): 0.2.17+ removed targets
   toolchains_llvm_bootstrapped 0.5.9 still references. Bump it when the

@@ -40,17 +40,19 @@ jobs:
 
       # Rolling differential fuzzing: fresh seeds every run, so coverage
       # accumulates across CI history instead of re-checking one window.
-      - name: Differential fuzzing, e1 (25 fresh seeds)
-        run: bazel run --config=ci //fuzz:diff -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25
+      # Mutated (4th arg = 3 mutation passes); pure generation is gated by
+      # the smoke tests in the step above.
+      - name: Differential fuzzing, e1 (25 fresh seeds, mutated)
+        run: bazel run --config=ci //fuzz:diff -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25 3
 
-      - name: Differential fuzzing, e2 (25 fresh seeds)
-        run: bazel run --config=ci //fuzz:diff_e2 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25
+      - name: Differential fuzzing, e2 (25 fresh seeds, mutated)
+        run: bazel run --config=ci //fuzz:diff_e2 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25 3
 
-      - name: Differential fuzzing, e3 (25 fresh seeds)
-        run: bazel run --config=ci //fuzz:diff_e3 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25
+      - name: Differential fuzzing, e3 (25 fresh seeds, mutated)
+        run: bazel run --config=ci //fuzz:diff_e3 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 25 3
 
-      - name: Differential fuzzing, e4 (25 fresh seeds)
-        run: bazel run --config=ci //fuzz:diff_e4 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 20
+      - name: Differential fuzzing, e4 (25 fresh seeds, mutated)
+        run: bazel run --config=ci //fuzz:diff_e4 -- -- 25 $(( ${{ github.run_number }} * 25 + 100000 )) 20 3
 
       - name: Upload fuzz failures
         if: failure()

@@ -229,13 +229,25 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
        `specInnerCalls` traces). Worked around with a new
        `koka_opts = ["--fno-specialize"]` attribute in rules_koka;
        reproduces in Koka v3.2.3 — worth reporting upstream.
-4. **Phase 4 — hardening.** Mutator (semantics-preserving transforms:
-   commute operands, split constants, wrap in always-true case) and
-   PEG `--stats` fuel-regression mode. CI integration ✅ done:
-   `.github/workflows/ci.yml` runs the test suite (incl. both fuzz
-   smokes) plus rolling 25-seed e1 and e2 campaigns — seeds derive from
-   the CI run number, so coverage accumulates across runs instead of
-   re-checking one window; failing programs are uploaded as artifacts.
+4. **Phase 4 — mutator.** ✅ Done (`efuzz [seed] [size] [level] [mutate]`,
+   4th arg = mutation passes; drivers take a 4th `MUTATE` arg). The
+   mutator applies semantics- AND type-preserving rewrites to a generated
+   program so the co-evaluated output is unchanged, reaching edge cases
+   pure generation misses:
+   - commute commutative binops (`a+b`, `a*b`, `a&&b`, `a||b`, `a==b`,
+     `a!=b`);
+   - flip ordering comparisons (`a<b` → `b>a`, `a<=b` → `b>=a`, mirror);
+   - rewrite int literals (`n` → `a+b` with `a+b=n`, `n+0`, `-(-n)`).
+   It is **self-validating**: `generate` co-evaluates before and after and
+   throws if the output changed (a non-semantics-preserving mutation = a
+   mutator bug). Level-safety comes for free — literal rewrites use only
+   `+`/unary-`-` (valid at e1+), and commute/flip only *rewrite* existing
+   nodes, which by construction exist only at the level that produced
+   them. Validated: 750 mutated seeds across e1–e4, 0 failures.
+   CI: `bazel test //fuzz/...` gates both pure and mutated smokes; the
+   rolling per-level campaigns now run mutated with fresh per-run seeds.
+   Still open: a reducer to minimize failing cases, and the PEG `--stats`
+   fuel-regression mode.
 5. **Later (as e5/e6 interpreters land)** — records/unit, then static
    typing. e6 adds a new oracle: well-typed-by-construction programs
    must type-check; deliberately ill-typed mutations must be rejected.

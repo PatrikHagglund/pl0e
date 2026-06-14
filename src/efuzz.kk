@@ -973,18 +973,213 @@ fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
 fun show-fstmts(ss: list<fstmt>, ind: string, lvl: int): div list<string>
   ss.flatmap(fn(s) show-fstmt(s, ind, lvl))
 
+// === Mutator (efuzz Phase 4) ===
+// Semantics- AND type-preserving rewrites of generated programs, to reach
+// edge cases pure generation misses. Each rewrite keeps the value (and
+// type) of the subexpression, so the co-evaluated output is unchanged;
+// `generate` co-evaluates before and after and throws if they differ,
+// making the mutator self-validating. Mutations:
+//   - commute commutative binops: a+b, a*b, a&&b, a||b, a==b, a!=b
+//   - flip ordering comparisons: a<b -> b>a, a<=b -> b>=a (and mirror)
+//   - rewrite int literals: n -> a+b (a+b=n), n+0, n*1, -(-n)
+// Only int literals are rewritten and only same-typed operands are
+// swapped, so well-typedness (needed at e3+/e6) is preserved.
+
+fun chance(st: genst, pct: int): (genst, bool)
+  val (st2, r) = pick(st, 100)
+  (st2, r < pct)
+
+// Only +/- and unary minus are used here (valid at every level e1+), so
+// literal mutation never introduces a level-restricted construct. (Commute
+// of */&&/|| and comparison flips only REWRITE existing nodes, which by
+// construction only exist at the level that generated them — so they too
+// stay level-safe without the mutator needing to know the level.)
+fun mut-lit(st: genst, n: int): (genst, fexpr)
+  val (st2, c) = chance(st, 45)
+  if !c then (st2, FLit(n))
+  else
+    val (st3, k) = pick(st2, 3)
+    if k == 0 then
+      val (st4, a) = pick(st3, n + 1)  // 0..n, so a + (n-a) = n, both >= 0
+      (st4, FAdd(FLit(a), FLit(n - a)))
+    elif k == 1 then (st3, FAdd(FLit(n), FLit(0)))
+    else (st3, FNeg(FNeg(FLit(n))))
+
+// Recurse into children, then maybe commute/flip this node.
+fun mut-expr(st: genst, e: fexpr): div (genst, fexpr)
+  match e
+    FLit(n) -> mut-lit(st, n)
+    FVar(_) -> (st, e)
+    FBool(_) -> (st, e)
+    FNeg(x) ->
+      val (s, x2) = mut-expr(st, x)
+      (s, FNeg(x2))
+    FNot(x) ->
+      val (s, x2) = mut-expr(st, x)
+      (s, FNot(x2))
+    FSub(l, r) ->
+      val (s1, l2) = mut-expr(st, l)
+      val (s2, r2) = mut-expr(s1, r)
+      (s2, FSub(l2, r2))
+    FDiv(l, r) ->
+      val (s1, l2) = mut-expr(st, l)
+      val (s2, r2) = mut-expr(s1, r)
+      (s2, FDiv(l2, r2))
+    FMod(l, r) ->
+      val (s1, l2) = mut-expr(st, l)
+      val (s2, r2) = mut-expr(s1, r)
+      (s2, FMod(l2, r2))
+    FAdd(l, r) -> mut-commute(st, l, r, fn(a, b) FAdd(a, b))
+    FMul(l, r) -> mut-commute(st, l, r, fn(a, b) FMul(a, b))
+    FAnd(l, r) -> mut-commute(st, l, r, fn(a, b) FAnd(a, b))
+    FOr(l, r) -> mut-commute(st, l, r, fn(a, b) FOr(a, b))
+    FCmp(op, l, r) ->
+      val (s1, l2) = mut-expr(st, l)
+      val (s2, r2) = mut-expr(s1, r)
+      val (s3, c) = chance(s2, 35)
+      if !c then (s3, FCmp(op, l2, r2))
+      else (s3, FCmp(flip-cmp(op), r2, l2))  // value-preserving: a<b == b>a, a==b == b==a
+    FCaseE(arms) ->
+      val (s, arms2) = mut-epairs(st, arms)
+      (s, FCaseE(arms2))
+    FLam(ps, body) ->
+      val (s, b2) = mut-expr(st, body)
+      (s, FLam(ps, b2))
+    FApp(f, args) ->
+      val (s, a2) = mut-elist(st, args)
+      (s, FApp(f, a2))
+    FArr(elems) ->
+      val (s, e2) = mut-elist(st, elems)
+      (s, FArr(e2))
+    FIdxDot(_, _) -> (st, e)
+    FIdxDyn(a, idx) ->
+      val (s, i2) = mut-expr(st, idx)
+      (s, FIdxDyn(a, i2))
+    FCasePE(scrut, arms) ->
+      val (s, arms2) = mut-pepairs(st, arms)
+      (s, FCasePE(scrut, arms2))
+
+fun flip-cmp(op: string): string
+  match op
+    "<" -> ">"
+    ">" -> "<"
+    "<=" -> ">="
+    ">=" -> "<="
+    _ -> op  // ==, != are symmetric
+
+fun mut-commute(st: genst, l: fexpr, r: fexpr, ctor: (fexpr, fexpr) -> fexpr): div (genst, fexpr)
+  val (s1, l2) = mut-expr(st, l)
+  val (s2, r2) = mut-expr(s1, r)
+  val (s3, c) = chance(s2, 35)
+  (s3, if c then ctor(r2, l2) else ctor(l2, r2))
+
+fun mut-elist(st: genst, es: list<fexpr>): div (genst, list<fexpr>)
+  match es
+    Nil -> (st, [])
+    Cons(e, rest) ->
+      val (s1, e2) = mut-expr(st, e)
+      val (s2, r2) = mut-elist(s1, rest)
+      (s2, Cons(e2, r2))
+
+fun mut-epairs(st: genst, ps: list<(fexpr, fexpr)>): div (genst, list<(fexpr, fexpr)>)
+  match ps
+    Nil -> (st, [])
+    Cons((g, b), rest) ->
+      val (s1, g2) = mut-expr(st, g)
+      val (s2, b2) = mut-expr(s1, b)
+      val (s3, r2) = mut-epairs(s2, rest)
+      (s3, Cons((g2, b2), r2))
+
+fun mut-pepairs(st: genst, ps: list<(fpat, fexpr)>): div (genst, list<(fpat, fexpr)>)
+  match ps
+    Nil -> (st, [])
+    Cons((p, b), rest) ->
+      val (s1, b2) = mut-expr(st, b)
+      val (s2, r2) = mut-pepairs(s1, rest)
+      (s2, Cons((p, b2), r2))
+
+fun mut-stmt(st: genst, s: fstmt): div (genst, fstmt)
+  match s
+    FDecl(_) -> (st, s)
+    FAssign(n, e) ->
+      val (s2, e2) = mut-expr(st, e)
+      (s2, FAssign(n, e2))
+    FPrint(e) ->
+      val (s2, e2) = mut-expr(st, e)
+      (s2, FPrint(e2))
+    FIf(cond, body) ->
+      val (s2, b2) = mut-stmts(st, body)
+      (s2, FIf(cond, b2))
+    FLoop(c, b, early, body) ->
+      val (s1, early2) = match early
+        Just(g) ->
+          val (sa, g2) = mut-expr(st, g)
+          (sa, Just(g2))
+        Nothing -> (st, Nothing)
+      val (s2, body2) = mut-stmts(s1, body)
+      (s2, FLoop(c, b, early2, body2))
+    FCase(arms) ->
+      val (s2, arms2) = mut-sarms(st, arms)
+      (s2, FCase(arms2))
+    FCaseP(scrut, arms) ->
+      val (s2, arms2) = mut-psarms(st, arms)
+      (s2, FCaseP(scrut, arms2))
+
+fun mut-sarms(st: genst, arms: list<(fexpr, list<fstmt>)>): div (genst, list<(fexpr, list<fstmt>)>)
+  match arms
+    Nil -> (st, [])
+    Cons((g, body), rest) ->
+      val (s1, g2) = mut-expr(st, g)
+      val (s2, body2) = mut-stmts(s1, body)
+      val (s3, r2) = mut-sarms(s2, rest)
+      (s3, Cons((g2, body2), r2))
+
+fun mut-psarms(st: genst, arms: list<(fpat, list<fstmt>)>): div (genst, list<(fpat, list<fstmt>)>)
+  match arms
+    Nil -> (st, [])
+    Cons((p, body), rest) ->
+      val (s1, body2) = mut-stmts(st, body)
+      val (s2, r2) = mut-psarms(s1, rest)
+      (s2, Cons((p, body2), r2))
+
+fun mut-stmts(st: genst, ss: list<fstmt>): div (genst, list<fstmt>)
+  match ss
+    Nil -> (st, [])
+    Cons(s, rest) ->
+      val (s1, s2) = mut-stmt(st, s)
+      val (s2b, r2) = mut-stmts(s1, rest)
+      (s2b, Cons(s2, r2))
+
+fun mutate-prog(seed: int, prog: list<fstmt>, passes: int): div list<fstmt>
+  var p := prog
+  var st := Genst(seed * 7919 + 3, 0, [], [], [], [], [])
+  repeat(passes) fn()
+    val (st2, p2) = mut-stmts(st, p)
+    st := st2
+    p := p2
+  p
+
 // === Main ===
 
 // Regenerate with a different internal seed if values explode
 // (multiplication inside loops); keeps interpreter runtimes sane.
 // An over-cap program has an aborted (wrong) co-evaluation, so it must
 // never be emitted: after 10 over-cap attempts, fail loudly instead.
-fun generate(seed: int, size: int, lvl: int, attempt: int): <div,exn> (list<fstmt>, list<string>, string)
+// With mutate>0, semantics-preserving mutations are applied and the
+// co-evaluated output must be unchanged (else the mutator has a bug).
+fun generate(seed: int, size: int, lvl: int, mutate: int, attempt: int): <div,exn> (list<fstmt>, list<string>, string)
   val prog = gen-program(seed * 1000 + attempt * 137, size, lvl)
   val (out, m, viol) = run-program(prog)
-  if m <= mag-cap then (prog, out, viol)
-  elif attempt < 9 then generate(seed, size, lvl, attempt + 1)
-  else throw("efuzz: magnitude cap exceeded on all attempts for seed " ++ seed.show)
+  if m > mag-cap then
+    if attempt < 9 then generate(seed, size, lvl, mutate, attempt + 1)
+    else throw("efuzz: magnitude cap exceeded on all attempts for seed " ++ seed.show)
+  elif mutate <= 0 then (prog, out, viol)
+  else
+    val prog2 = mutate-prog(seed, prog, mutate)
+    val (out2, _, viol2) = run-program(prog2)
+    if out2 != out then
+      throw("efuzz: mutator changed output for seed " ++ seed.show ++ " (mutation not semantics-preserving)")
+    (prog2, out2, viol2)
 
 pub fun main()
   val args = get-args()
@@ -997,9 +1192,12 @@ pub fun main()
   val lvl = match args
     Cons(_, Cons(_, Cons(s, _))) -> s.parse-int.default(1)
     _ -> 1
+  val mutate = match args
+    Cons(_, Cons(_, Cons(_, Cons(s, _)))) -> s.parse-int.default(0)
+    _ -> 0
 
-  val (prog, expected, viol) = generate(seed, size, lvl, 0)
-  println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show)
+  val (prog, expected, viol) = generate(seed, size, lvl, mutate, 0)
+  println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show ++ " mutate=" ++ mutate.show)
   println("// violations: " ++ (if viol == "" then "none" else viol))
   show-fstmts(prog, "", lvl).foreach(println)
   expected.foreach(fn(line) println("// expect: " ++ line))

@@ -51,6 +51,22 @@ sh_test(
     timeout = "moderate",
 )
 
+# Same but with the mutator on (4th arg = mutation passes), gating efuzz
+# Phase 4: semantics-preserving mutations must still match the oracle.
+sh_test(
+    name = "efuzz_mut_smoke",
+    srcs = ["e1_diff.sh"],
+    args = _DIFF_ARGS + [
+        "--",
+        "10",
+        "1",
+        "15",
+        "3",
+    ],
+    data = _DIFF_DATA,
+    timeout = "moderate",
+)
+
 # Differential fuzzing for e2 (e2peg vs e3peg vs expected):
 #   bazel run //fuzz:diff_e2 -- <count> <start-seed> <size>
 _DIFF_E2_ARGS = [
@@ -82,6 +98,20 @@ sh_test(
         "10",
         "1",
         "15",
+    ],
+    data = _DIFF_E2_DATA,
+    timeout = "moderate",
+)
+
+sh_test(
+    name = "efuzz_e2_mut_smoke",
+    srcs = ["e2_diff.sh"],
+    args = _DIFF_E2_ARGS + [
+        "--",
+        "10",
+        "1",
+        "15",
+        "3",
     ],
     data = _DIFF_E2_DATA,
     timeout = "moderate",
@@ -120,6 +150,20 @@ sh_test(
     timeout = "moderate",
 )
 
+sh_test(
+    name = "efuzz_e3_mut_smoke",
+    srcs = ["e3_diff.sh"],
+    args = _DIFF_E3_ARGS + [
+        "--",
+        "10",
+        "1",
+        "15",
+        "3",
+    ],
+    data = _DIFF_E3_DATA,
+    timeout = "moderate",
+)
+
 # Differential fuzzing for e4 (e4peg vs expected + enforce oracle):
 #   bazel run //fuzz:diff_e4 -- <count> <start-seed> <size>
 _DIFF_E4_ARGS = [
@@ -148,6 +192,20 @@ sh_test(
         "10",
         "1",
         "15",
+    ],
+    data = _DIFF_E4_DATA,
+    timeout = "moderate",
+)
+
+sh_test(
+    name = "efuzz_e4_mut_smoke",
+    srcs = ["e4_diff.sh"],
+    args = _DIFF_E4_ARGS + [
+        "--",
+        "10",
+        "1",
+        "15",
+        "3",
     ],
     data = _DIFF_E4_DATA,
     timeout = "moderate",

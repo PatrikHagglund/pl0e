@@ -15,11 +15,13 @@ shift 3
 COUNT=20
 SEED0=1
 SIZE=20
+MUTATE=0
 if [ "${1:-}" = "--" ]; then
     shift
     COUNT=${1:-20}
     SEED0=${2:-1}
     SIZE=${3:-20}
+    MUTATE=${4:-0}
 fi
 
 OUTDIR="${TEST_UNDECLARED_OUTPUTS_DIR:-${BUILD_WORKING_DIRECTORY:-$PWD}}/fuzz-failures"
@@ -37,7 +39,7 @@ run_filtered() {
 
 for ((seed = SEED0; seed < SEED0 + COUNT; seed++)); do
     prog="$TMP/prog.e2"
-    if ! timeout 30 "$EFUZZ" "$seed" "$SIZE" 2 > "$prog"; then
+    if ! timeout 30 "$EFUZZ" "$seed" "$SIZE" 2 "$MUTATE" > "$prog"; then
         echo "FAIL seed=$seed: generator error"
         fail=$((fail + 1))
         continue

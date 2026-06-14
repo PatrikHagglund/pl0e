@@ -15,10 +15,15 @@
   (`rec.field := e`, `arr.0 := e`)
 - efuzz Phase 3c: extend the generator to e5 (records in the value domain,
   record patterns, field access; `nofield` as a violation kind candidate)
-- efuzz Phase 4: mutator (semantics-preserving transforms), reducer,
-  PEG `--stats` fuel-regression mode. (The original first candidate —
-  e4peg's exponential paren backtracking — is now FIXED by left-factoring
-  paren_expr; see docs/FUZZING.md.)
+- ~~efuzz Phase 4 mutator~~ DONE (2026-06-14): semantics+type-preserving
+  rewrites (commute commutative binops, flip ordering comparisons, rewrite
+  int literals), self-validating (co-eval before/after must match), level-
+  safe by construction. `efuzz ... [mutate]` + drivers' 4th MUTATE arg;
+  pure+mutated smokes gated, rolling CI campaigns now mutated. 750 mutated
+  seeds e1-e4, 0 failures. Remaining Phase 4: reducer to minimize failing
+  cases; PEG `--stats` fuel-regression mode. (The original --stats first
+  candidate — e4peg exponential paren backtracking — was already fixed by
+  left-factoring paren_expr.)
 - PEG engine: the action-executing path (peg-exec-*) is NOT memoized
   (only the action-less matcher is), so overlapping-FIRST rules re-parse
   on backtrack. Left-factoring paren_expr fixed the one exponential case;

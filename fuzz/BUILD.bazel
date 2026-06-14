@@ -211,6 +211,57 @@ sh_test(
     timeout = "moderate",
 )
 
+# Differential fuzzing for e5 (e5peg vs expected + enforce oracle):
+#   bazel run //fuzz:diff_e5 -- <count> <start-seed> <size> [mutate]
+_DIFF_E5_ARGS = [
+    "$(location //src:efuzz)",
+    "$(location //src:e5peg)",
+]
+
+_DIFF_E5_DATA = [
+    "//src:efuzz",
+    "//src:e5peg",
+    "//src:e5.peg",
+]
+
+sh_binary(
+    name = "diff_e5",
+    srcs = ["e5_diff.sh"],
+    args = _DIFF_E5_ARGS,
+    data = _DIFF_E5_DATA,
+)
+
+sh_test(
+    name = "efuzz_e5_smoke",
+    srcs = ["e5_diff.sh"],
+    args = _DIFF_E5_ARGS + ["--", "10", "1", "15"],
+    data = _DIFF_E5_DATA,
+    timeout = "moderate",
+)
+
+sh_test(
+    name = "efuzz_e5_mut_smoke",
+    srcs = ["e5_diff.sh"],
+    args = _DIFF_E5_ARGS + ["--", "10", "1", "15", "3"],
+    data = _DIFF_E5_DATA,
+    timeout = "moderate",
+)
+
+sh_binary(
+    name = "reduce_e5",
+    srcs = ["reduce.sh"],
+    args = [
+        "$(location //src:efuzz)",
+        "$(location //src:e5peg)",
+        "5",
+    ],
+    data = [
+        "//src:efuzz",
+        "//src:e5peg",
+        "//src:e5.peg",
+    ],
+)
+
 # Delta-debugging reducer (see docs/FUZZING.md):
 #   bazel run //fuzz:reduce_e4 -- <seed> <size> <mutate>
 # Shrinks a failing efuzz program (against e4peg) to a minimal repro.

@@ -229,6 +229,14 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
        `specInnerCalls` traces). Worked around with a new
        `koka_opts = ["--fno-specialize"]` attribute in rules_koka;
        reproduces in Koka v3.2.3 — worth reporting upstream.
+   - **e5** ✅ Done (`efuzz [seed] [size] 5`, `bazel run //fuzz:diff_e5`).
+     Records: literals `{f0: e, ...}` (int fields), field access `r.f0`,
+     and record pattern-cases `case r { {f0: p, ...} -> ... }` with width
+     subtyping (a pattern lists a subset of fields; extras allowed),
+     reusing the level-4 scrutinee-case machinery. Co-evaluator gains
+     `RRec`; the mutator and reducer handle the new nodes. Fields are
+     int-only for now (bool/nested fields are a follow-up). Validated:
+     300 e5 seeds (pure + mutated), 0 failures.
 4. **Phase 4 — mutator.** ✅ Done (`efuzz [seed] [size] [level] [mutate]`,
    4th arg = mutation passes; drivers take a 4th `MUTATE` arg). The
    mutator applies semantics- AND type-preserving rewrites to a generated

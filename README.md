@@ -11,7 +11,7 @@ Currently in an initial work-in-progress state.
 - e0 and e2-e6 have PEG interpreters in Koka; e3 has a [language specification](docs/E3_SPEC.md); e6 adds static type checking
 - Benchmarks for levels 1, 2, and 3
 - For each level, example code shows how to emulate higher-level features with lower-level primitives
-- `efuzz`: differential fuzzer for e1-e4 — generates random well-defined programs with known output and diffs implementations against a co-evaluated oracle, including violation checking (see [docs/FUZZING.md](docs/FUZZING.md))
+- `efuzz`: differential fuzzer for e1-e5 — generates random well-defined programs with known output and diffs implementations against a co-evaluated oracle, including violation checking (see [docs/FUZZING.md](docs/FUZZING.md))
 
 **Philosophy:**
 - Keep languages small
@@ -110,7 +110,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 - [docs/E1_SPEC.md](docs/E1_SPEC.md), [docs/E3_SPEC.md](docs/E3_SPEC.md) — Language specifications (e1: minimal; e3: introduces behavior categories)
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification, static analysis (`--warn` flag)
-- [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (levels e1-e4)
+- [docs/FUZZING.md](docs/FUZZING.md) — `efuzz`, a differential fuzzing tool adapted from llvm-fuzzgen (levels e1-e5; mutator + reducer)
 - [docs/minimal_turing_languages.md](docs/minimal_turing_languages.md) — Survey of minimal Turing-complete languages (Minsky machines, λ-calculus, etc.)
 - [examples/](examples/) — All example programs for each language level
 

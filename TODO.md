@@ -13,8 +13,13 @@
   saved decisions for later): tuples `(a, b)`, optional case scrutinee,
   block-as-expression (trailing expression value), lvalue assignment paths
   (`rec.field := e`, `arr.0 := e`)
-- efuzz Phase 3c: extend the generator to e5 (records in the value domain,
-  record patterns, field access; `nofield` as a violation kind candidate)
+- ~~efuzz Phase 3c: extend the generator to e5~~ DONE (2026-06-14):
+  records (int-field literals, field access, record pattern-cases with
+  width subtyping), RRec in the co-evaluator, mutator+reducer support,
+  //fuzz:diff_e5 + smokes + reduce_e5 + CI rolling. 300 seeds, 0 fails.
+  Follow-up: bool/nested record fields.
+- efuzz e6: extend the generator to e6 (typed bindings, type decls, typed
+  lambda params) for the type-check oracle below. Builds on e5 gen.
 - ~~efuzz Phase 4 mutator~~ DONE (2026-06-14): semantics+type-preserving
   rewrites, self-validating, level-safe. `efuzz ... [mutate]` + drivers'
   4th MUTATE arg; pure+mutated smokes gated, rolling CI campaigns mutated.

@@ -1,9 +1,13 @@
-// efuzz: random e1/e2/e3 program generator with co-evaluation (docs/FUZZING.md)
+// efuzz: random e1-e5 program generator with co-evaluation (docs/FUZZING.md)
 //
 // Generates well-defined programs (termination by construction) together
 // with their expected output, for differential testing across implementations.
 //
-// Usage: efuzz [seed] [size] [level]      (level: 1, 2 or 3, default 1)
+// Usage: efuzz [seed] [size] [level] [mutate] [keep]
+//   level:  1..5 (default 1); 5 adds records/field-access/record-patterns
+//   mutate: semantics-preserving mutation passes (default 0)
+//   keep:   "all" (default) | "none" | "0,2,5" — body statements to keep
+//           (reducer); the kept program is re-co-evaluated for its oracle
 //
 // Output: the program, a "// violations:" marker (first erroneous construct
 // the program triggers, or "none"), the program text, and its expected
@@ -66,13 +70,16 @@ type fexpr
   FIdxDot(arr: string, i: int)          // level 4: arr.i (literal index, may be oob)
   FIdxDyn(arr: string, idx: fexpr)      // level 4: arr (idx) (dynamic index, may be oob)
   FCasePE(scrut: string, arms: list<(fpat, fexpr)>)  // level 4 pattern-case expression
+  FRecLit(fields: list<(string, fexpr)>)  // level 5: record literal {f0: e, ...}, int fields
+  FField(rec: string, fld: string)         // level 5: rec.field (always present -> int)
 
-// Patterns (level 4)
+// Patterns (level 4-5)
 type fpat
   PWildP
   PVarP(name: string)
   PLitP(n: int)
   PArrP(elems: list<fpat>, rest: bool)  // exact (a; b;) or prefix (a; b; _)
+  PRecP(fields: list<(string, fpat)>)   // level 5: record pattern {f0: p, ...} (width subtyping)
 
 type fstmt
   FDecl(name: string)
@@ -97,40 +104,45 @@ struct genst
   bvars: list<string>          // bool variables (level 3+)
   fvars: list<(string, int)>   // closure variables: (name, arity) (level 3+)
   avars: list<string>          // array variables (level 4)
+  rvars: list<(string, int)>   // record variables: (name, field count); fields
+                               // are f0..f{n-1}, all int (level 5)
   ros: list<string>            // read-only int vars (loop counters: assigning
                                // one could break guaranteed termination)
 
 fun rng-next(st: genst): (genst, int)
   val s2 = (st.seed * 6364136223846793005 + 1442695040888963407) % 18446744073709551616
-  (Genst(s2, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, st.ros), (s2 / 8589934592) % 2147483648)
+  (Genst(s2, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, st.rvars, st.ros), (s2 / 8589934592) % 2147483648)
 
 fun pick(st: genst, n: int): (genst, int)
   val (st2, r) = rng-next(st)
   (st2, r % n)
 
 fun fresh(st: genst, pre: string): (genst, string)
-  (Genst(st.seed, st.nextid + 1, st.ivars, st.bvars, st.fvars, st.avars, st.ros), pre ++ st.nextid.show)
+  (Genst(st.seed, st.nextid + 1, st.ivars, st.bvars, st.fvars, st.avars, st.rvars, st.ros), pre ++ st.nextid.show)
 
 fun add-ivar(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, Cons(name, st.ivars), st.bvars, st.fvars, st.avars, st.ros)
+  Genst(st.seed, st.nextid, Cons(name, st.ivars), st.bvars, st.fvars, st.avars, st.rvars, st.ros)
 
 fun add-bvar(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, st.ivars, Cons(name, st.bvars), st.fvars, st.avars, st.ros)
+  Genst(st.seed, st.nextid, st.ivars, Cons(name, st.bvars), st.fvars, st.avars, st.rvars, st.ros)
 
 fun add-fvar(st: genst, name: string, arity: int): genst
-  Genst(st.seed, st.nextid, st.ivars, st.bvars, Cons((name, arity), st.fvars), st.avars, st.ros)
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, Cons((name, arity), st.fvars), st.avars, st.rvars, st.ros)
 
 fun add-avar(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, Cons(name, st.avars), st.ros)
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, Cons(name, st.avars), st.rvars, st.ros)
+
+fun add-rvar(st: genst, name: string, nfields: int): genst
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, Cons((name, nfields), st.rvars), st.ros)
 
 fun add-ro(st: genst, name: string): genst
-  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, Cons(name, st.ros))
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, st.rvars, Cons(name, st.ros))
 
 fun with-ivars(st: genst, ivs: list<string>): genst
-  Genst(st.seed, st.nextid, ivs, st.bvars, st.fvars, st.avars, st.ros)
+  Genst(st.seed, st.nextid, ivs, st.bvars, st.fvars, st.avars, st.rvars, st.ros)
 
 fun restore-vars(st: genst, saved: genst): genst
-  Genst(st.seed, st.nextid, saved.ivars, saved.bvars, saved.fvars, saved.avars, saved.ros)
+  Genst(st.seed, st.nextid, saved.ivars, saved.bvars, saved.fvars, saved.avars, saved.rvars, saved.ros)
 
 fun pick-from(st: genst, vs: list<string>): (genst, maybe<string>)
   match vs
@@ -181,8 +193,10 @@ fun gen-iexpr(st: genst, depth: int, lvl: int): div (genst, fexpr)
       Nothing -> gen-lit(st3)
   elif lvl >= 3 && r < 46 && !st2.fvars.is-nil then
     gen-app(st2, depth, lvl)
-  elif lvl >= 4 && r < 52 && !st2.avars.is-nil then
+  elif lvl >= 4 && r < 50 && !st2.avars.is-nil then
     gen-index(st2, depth, lvl)
+  elif lvl >= 5 && r < 52 && !st2.rvars.is-nil then
+    gen-field(st2)
   elif r < 52 then
     val (st3, e) = gen-iexpr(st2, depth - 1, lvl)
     (st3, FNeg(e))
@@ -229,6 +243,23 @@ fun gen-index(st: genst, depth: int, lvl: int): div (genst, fexpr)
       else
         val (st4, idx) = gen-iexpr(st3, 1, lvl)
         (st4, FIdxDyn(a, FMod(idx, FLit(5))))  // keep dynamic indexes small-ish
+    Nothing -> gen-lit(st2)
+
+// Record field access (level 5): r.f<i> for a known record var and a field
+// index within its (all-int) fields — always well-typed, always present.
+fun pick-rvar(st: genst): (genst, maybe<(string, int)>)
+  match st.rvars
+    Nil -> (st, Nothing)
+    rs ->
+      val (st2, i) = pick(st, rs.length)
+      (st2, rs.drop(i).head)
+
+fun gen-field(st: genst): div (genst, fexpr)
+  val (st2, mr) = pick-rvar(st)
+  match mr
+    Just((r, nf)) ->
+      val (st3, i) = pick(st2, nf)
+      (st3, FField(r, "f" ++ i.show))
     Nothing -> gen-lit(st2)
 
 fun gen-args(st: genst, depth: int, lvl: int, n: int): div (genst, list<fexpr>)
@@ -416,6 +447,7 @@ fun add-pat-vars(st: genst, p: fpat): genst
   match p
     PVarP(name) -> st.add-avar(name)  // top-level: binds the array
     PArrP(elems, _) -> add-elem-vars(st, elems)
+    PRecP(fields) -> add-elem-vars(st, fields.map(snd))  // field binders are int
     _ -> st
 
 fun add-elem-vars(st: genst, elems: list<fpat>): genst
@@ -474,6 +506,12 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     val (st4, k) = pick(st3, 4)
     val (st5, elems) = gen-args(st4, 2, lvl, k + 1)
     (st5.add-avar(name), [FAssign(name, FArr(elems))])
+  elif lvl >= 5 && r < 70 then
+    val (st3, name) = fresh(st2, "r")
+    val (st4, nf) = pick(st3, 3)
+    val nfields = nf + 1
+    val (st5, fields) = gen-rec-fields(st4, lvl, nfields, 0)
+    (st5.add-rvar(name, nfields), [FAssign(name, FRecLit(fields))])
   elif r < 80 && depth < 2 then
     val saved = st2
     val (st3, counter) = fresh(st2, "c")
@@ -493,7 +531,8 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     (st7.restore-vars(saved), [FLoop(counter, b + 1, early, body)])
   elif depth < 2 && !st2.ivars.is-nil then
     val (st3, q) = pick(st2, 100)
-    if lvl >= 4 && q < 50 && !st3.avars.is-nil then gen-casep(st3, depth, lvl)
+    if lvl >= 5 && q < 25 && !st3.rvars.is-nil then gen-reccasep(st3, depth, lvl)
+    elif lvl >= 4 && q < 50 && !st3.avars.is-nil then gen-casep(st3, depth, lvl)
     elif lvl >= 2 && lvl <= 3 && q < 50 then gen-case(st3, depth, lvl)
     else
       val saved = st3
@@ -501,6 +540,69 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
       val (st5, body) = gen-stmts(st4, depth + 1, lvl)
       (st5.restore-vars(saved), [FIf(mv.default("acc"), body)])
   else gen-assign(st2, lvl)
+
+// Record literal fields: f0..f{nfields-1}, each an int expression (level 5).
+fun gen-rec-fields(st: genst, lvl: int, nfields: int, i: int): div (genst, list<(string, fexpr)>)
+  if i >= nfields then (st, [])
+  else
+    val (st2, e) = gen-iexpr(st, 2, lvl)
+    val (st3, rest) = gen-rec-fields(st2, lvl, nfields, i + 1)
+    (st3, Cons(("f" ++ i.show, e), rest))
+
+// Pattern-case on a record variable (level 5), reusing FCaseP with record
+// patterns. Bindings (int field binders) persist after the taken arm.
+fun gen-reccasep(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
+  val (st2, mr) = pick-rvar(st)
+  match mr
+    Just((r, nf)) ->
+      val (st3, n) = pick(st2, 2)
+      val (st4, arms) = gen-rec-arms(st3, depth, lvl, nf, n + 2)
+      (st4, [FCaseP(r, arms)])
+    Nothing -> gen-assign(st2, lvl)
+
+fun gen-rec-arms(st: genst, depth: int, lvl: int, nf: int, n: int): div (genst, list<(fpat, list<fstmt>)>)
+  if n <= 0 then (st, [])
+  else
+    val (st2, p) =
+      if n == 1 then (st, PWildP)  // catch-all (records have no empty pattern)
+      else gen-rec-pat(st, nf)
+    val saved = st2
+    val st3 = add-pat-vars(st2, p)
+    val (st4, nb) = pick(st3, 2)
+    val (st5, body) = gen-stmts-n(st4, depth + 1, lvl, nb + 1)
+    val st6 = st5.restore-vars(saved)
+    val (st7, rest) = gen-rec-arms(st6, depth, lvl, nf, n - 1)
+    (st7, Cons((p, body), rest))
+
+// A record pattern listing a non-empty subset of f0..f{nf-1}, each an int
+// sub-pattern (binder/wildcard/literal).
+fun gen-rec-pat(st: genst, nf: int): div (genst, fpat)
+  val (st2, fields) = gen-rec-pat-fields(st, nf, 0, [])
+  // ensure at least one field (record patterns can't be empty)
+  match fields
+    Nil ->
+      val (st3, name) = fresh(st2, "m")
+      (st3, PRecP([("f0", PVarP(name))]))
+    _ -> (st2, PRecP(fields))
+
+fun gen-rec-pat-fields(st: genst, nf: int, i: int, acc: list<(string, fpat)>): div (genst, list<(string, fpat)>)
+  if i >= nf then (st, acc)
+  else
+    val (st2, inc) = pick(st, 100)
+    if inc < 55 then  // include field i with an int sub-pattern
+      val (st3, p) = gen-int-pat(st2)
+      gen-rec-pat-fields(st3, nf, i + 1, acc ++ [("f" ++ i.show, p)])
+    else gen-rec-pat-fields(st2, nf, i + 1, acc)
+
+fun gen-int-pat(st: genst): div (genst, fpat)
+  val (st2, k) = pick(st, 3)
+  if k == 0 then (st2, PWildP)
+  elif k == 1 then
+    val (st3, name) = fresh(st2, "m")
+    (st3, PVarP(name))
+  else
+    val (st3, n) = pick(st2, 5)
+    (st3, PLitP(n))
 
 // Pattern-case statement on an array variable (level 4)
 fun gen-casep(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
@@ -563,7 +665,7 @@ fun gen-stmts-n(st: genst, depth: int, lvl: int, n: int): div (genst, list<fstmt
     (st3, ss1 ++ ss2)
 
 fun gen-program(seed: int, size: int, lvl: int): div list<fstmt>
-  val st0 = Genst(seed * 2 + 1, 0, [], [], [], [], []).add-ivar("acc")
+  val st0 = Genst(seed * 2 + 1, 0, [], [], [], [], [], []).add-ivar("acc")
   val (_, stmts) = gen-stmts-n(st0, 0, lvl, size)
   Cons(FAssign("acc", FLit(0)), stmts) ++ [FPrint(FVar("acc"))]
 
@@ -574,6 +676,7 @@ type rv
   RBool(b: bool)
   RClos(ps: list<string>, body: fexpr, cenv: list<(string, rv)>)
   RArr(elems: list<rv>)
+  RRec(fields: list<(string, rv)>)
 
 alias fenv = list<(string, rv)>
 
@@ -664,6 +767,13 @@ fun feval(e: fenv, ex: fexpr): <div,exn,viol-flag> rv
       val i = feval(e, idx).as-int
       index-arr(e, a, i)
     FCasePE(scrut, arms) -> feval-casep(fget(e, scrut), arms, e)
+    FRecLit(fields) -> RRec(fields.map(fn(f) (f.fst, feval(e, f.snd))))
+    FField(rec, fld) ->
+      match fget(e, rec)
+        RRec(fields) -> match fields.filter(fn(f) f.fst == fld)
+          Cons((_, v), _) -> v
+          Nil -> throw("efuzz internal error: missing field " ++ fld)
+        _ -> throw("efuzz internal error: record expected")
     FLam(ps, body) -> RClos(ps, body, e)  // captures environment at creation
     FApp(f, args) ->
       match fget(e, f)
@@ -709,7 +819,22 @@ fun match-pat(p: fpat, v: rv): div maybe<list<(string, rv)>>
       val plen = elems.length
       if (if rest then len < plen else len != plen) then Nothing
       else match-pat-elems(elems, vs)
+    (PRecP(fps), RRec(fields)) -> match-pat-fields(fps, fields)
     _ -> Nothing
+
+// Record pattern: each listed field must exist and match (width subtyping —
+// extra scrutinee fields are allowed), mirroring e5peg.
+fun match-pat-fields(fps: list<(string, fpat)>, fields: list<(string, rv)>): div maybe<list<(string, rv)>>
+  match fps
+    Nil -> Just([])
+    Cons((fld, p), rest) ->
+      match fields.filter(fn(f) f.fst == fld)
+        Cons((_, v), _) -> match match-pat(p, v)
+          Nothing -> Nothing
+          Just(binds) -> match match-pat-fields(rest, fields)
+            Nothing -> Nothing
+            Just(more) -> Just(binds ++ more)
+        Nil -> Nothing
 
 fun match-pat-elems(ps: list<fpat>, vs: list<rv>): div maybe<list<(string, rv)>>
   match (ps, vs)
@@ -746,6 +871,7 @@ fun mag(m: int, v: rv): div int
       val an = if n < 0 then 0 - n else n
       if an > m then an else m
     RArr(elems) -> mag-list(m, elems)
+    RRec(fields) -> mag-list(m, fields.map(snd))
     _ -> m
 
 fun mag-list(m: int, vs: list<rv>): div int
@@ -770,6 +896,8 @@ fun show-rv(v: rv): div string
     RArr(elems) ->  // e4peg format: "(1; 2;)", empty "()"
       if elems.is-nil then "()"
       else "(" ++ elems.map(show-rv).join("; ") ++ ";)"
+    RRec(fields) ->  // e5peg format: "{f0: 1, f1: 2}"
+      "{" ++ fields.map(fn(f) f.fst ++ ": " ++ show-rv(f.snd)).join(", ") ++ "}"
 
 // Returns (env, output lines in reverse order, max |int value| seen)
 fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): <div,exn,viol-flag> (fenv, list<string>, int)
@@ -879,6 +1007,9 @@ fun show-fexpr(ex: fexpr): div string
     FCasePE(scrut, arms) ->
       "case " ++ scrut ++ " { " ++
         arms.map(fn((p, b)) show-fpat(p) ++ " -> " ++ show-fexpr(b)).join(", ") ++ " }"
+    FField(rec, fld) -> rec ++ "." ++ fld
+    FRecLit(fields) ->
+      "{" ++ fields.map(fn(f) f.fst ++ ": " ++ show-fexpr(f.snd)).join(", ") ++ "}"
     _ -> "(" ++ show-fexpr-raw(ex) ++ ")"
 
 fun show-fpat(p: fpat): div string
@@ -889,6 +1020,8 @@ fun show-fpat(p: fpat): div string
     PArrP(elems, rest) ->
       if rest then "(" ++ elems.map(show-fpat).join("; ") ++ "; _)"
       else "(" ++ elems.map(show-fpat).join("; ") ++ ";)"
+    PRecP(fields) ->
+      "{" ++ fields.map(fn(f) f.fst ++ ": " ++ show-fpat(f.snd)).join(", ") ++ "}"
 
 fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
   match s
@@ -1058,6 +1191,10 @@ fun mut-expr(st: genst, e: fexpr): div (genst, fexpr)
     FCasePE(scrut, arms) ->
       val (s, arms2) = mut-pepairs(st, arms)
       (s, FCasePE(scrut, arms2))
+    FField(_, _) -> (st, e)
+    FRecLit(fields) ->
+      val (s, fields2) = mut-rfields(st, fields)
+      (s, FRecLit(fields2))
 
 fun flip-cmp(op: string): string
   match op
@@ -1080,6 +1217,14 @@ fun mut-elist(st: genst, es: list<fexpr>): div (genst, list<fexpr>)
       val (s1, e2) = mut-expr(st, e)
       val (s2, r2) = mut-elist(s1, rest)
       (s2, Cons(e2, r2))
+
+fun mut-rfields(st: genst, fs: list<(string, fexpr)>): div (genst, list<(string, fexpr)>)
+  match fs
+    Nil -> (st, [])
+    Cons((k, e), rest) ->
+      val (s1, e2) = mut-expr(st, e)
+      val (s2, r2) = mut-rfields(s1, rest)
+      (s2, Cons((k, e2), r2))
 
 fun mut-epairs(st: genst, ps: list<(fexpr, fexpr)>): div (genst, list<(fexpr, fexpr)>)
   match ps
@@ -1152,7 +1297,7 @@ fun mut-stmts(st: genst, ss: list<fstmt>): div (genst, list<fstmt>)
 
 fun mutate-prog(seed: int, prog: list<fstmt>, passes: int): div list<fstmt>
   var p := prog
-  var st := Genst(seed * 7919 + 3, 0, [], [], [], [], [])
+  var st := Genst(seed * 7919 + 3, 0, [], [], [], [], [], [])
   repeat(passes) fn()
     val (st2, p2) = mut-stmts(st, p)
     st := st2

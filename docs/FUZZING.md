@@ -246,8 +246,20 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    them. Validated: 750 mutated seeds across e1–e4, 0 failures.
    CI: `bazel test //fuzz/...` gates both pure and mutated smokes; the
    rolling per-level campaigns now run mutated with fresh per-run seeds.
-   Still open: a reducer to minimize failing cases, and the PEG `--stats`
-   fuel-regression mode.
+
+   **Reducer** ✅ Done (`bazel run //fuzz:reduce_e4 -- <seed> <size>
+   <mutate>`, also `reduce_e3`). Delta-debugging: efuzz takes a 5th `keep`
+   mask arg ("all" | "none" | "0,2,5") that keeps only those top-level
+   body statements and RE-CO-EVALUATES, so the `// expect:` oracle stays
+   correct for the reduced program (no stale expectations). `reduce.sh`
+   greedily drops statements while the failure persists — interestingness
+   is "interpreter output != co-evaluated expect, or timeout/crash".
+   Validated: a passing seed reports "nothing to reduce"; via the
+   `REDUCE_GREP` self-test predicate the ddmin loop shrank a 14-statement
+   program to the 1 statement responsible for a target output line.
+   Still open: the PEG `--stats` fuel-regression mode (its original
+   motivating case, e4 paren backtracking, is already fixed); finer
+   (nested) reduction granularity; reducing against the enforce oracle.
 5. **Later (as e5/e6 interpreters land)** — records/unit, then static
    typing. e6 adds a new oracle: well-typed-by-construction programs
    must type-check; deliberately ill-typed mutations must be rejected.

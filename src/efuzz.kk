@@ -1159,6 +1159,28 @@ fun mutate-prog(seed: int, prog: list<fstmt>, passes: int): div list<fstmt>
     p := p2
   p
 
+// === Reducer support (efuzz Phase 4): keep mask ===
+// A program is [acc := 0] ++ body ++ [print acc]. The reducer shrinks it by
+// keeping only a subset of body statements (by 0-based index); efuzz then
+// re-co-evaluates the kept program so its // expect: oracle is correct for
+// the reduced program. The harness head/tail are always kept.
+fun apply-keep(prog: list<fstmt>, keep: maybe<list<int>>): list<fstmt>
+  match keep
+    Nothing -> prog
+    Just(idxs) ->
+      match prog
+        Cons(head, rest) ->
+          match rest.reverse
+            Cons(tail, body-rev) ->
+              val body = body-rev.reverse
+              val kept = body.map-indexed(fn(i, s) (i, s)).filter(fn(p) idxs.any(fn(j) j == p.fst)).map(snd)
+              Cons(head, kept ++ [tail])
+            Nil -> prog
+        Nil -> prog
+
+fun body-count(prog: list<fstmt>): int
+  max(0, prog.length - 2)
+
 // === Main ===
 
 // Regenerate with a different internal seed if values explode
@@ -1167,19 +1189,25 @@ fun mutate-prog(seed: int, prog: list<fstmt>, passes: int): div list<fstmt>
 // never be emitted: after 10 over-cap attempts, fail loudly instead.
 // With mutate>0, semantics-preserving mutations are applied and the
 // co-evaluated output must be unchanged (else the mutator has a bug).
-fun generate(seed: int, size: int, lvl: int, mutate: int, attempt: int): <div,exn> (list<fstmt>, list<string>, string)
-  val prog = gen-program(seed * 1000 + attempt * 137, size, lvl)
-  val (out, m, viol) = run-program(prog)
+// keep restricts the body to the given statement indices (reducer); the
+// kept program is re-co-evaluated for its own (smaller) oracle.
+fun generate(seed: int, size: int, lvl: int, mutate: int, keep: maybe<list<int>>, attempt: int): <div,exn> (list<fstmt>, list<string>, string, int)
+  val prog0 = gen-program(seed * 1000 + attempt * 137, size, lvl)
+  val (out, m, _viol) = run-program(prog0)
   if m > mag-cap then
-    if attempt < 9 then generate(seed, size, lvl, mutate, attempt + 1)
+    if attempt < 9 then generate(seed, size, lvl, mutate, keep, attempt + 1)
     else throw("efuzz: magnitude cap exceeded on all attempts for seed " ++ seed.show)
-  elif mutate <= 0 then (prog, out, viol)
   else
-    val prog2 = mutate-prog(seed, prog, mutate)
-    val (out2, _, viol2) = run-program(prog2)
-    if out2 != out then
-      throw("efuzz: mutator changed output for seed " ++ seed.show ++ " (mutation not semantics-preserving)")
-    (prog2, out2, viol2)
+    val prog = if mutate <= 0 then prog0 else
+      val pm = mutate-prog(seed, prog0, mutate)
+      val (outm, _, _) = run-program(pm)
+      if outm != out then
+        throw("efuzz: mutator changed output for seed " ++ seed.show ++ " (mutation not semantics-preserving)")
+      pm
+    val n = body-count(prog)
+    val progk = apply-keep(prog, keep)
+    val (outk, _, violk) = run-program(progk)
+    (progk, outk, violk, n)
 
 pub fun main()
   val args = get-args()
@@ -1195,9 +1223,16 @@ pub fun main()
   val mutate = match args
     Cons(_, Cons(_, Cons(_, Cons(s, _)))) -> s.parse-int.default(0)
     _ -> 0
+  // 5th arg: keep mask for reduction — "all" (default) or comma-separated
+  // body-statement indices, e.g. "0,2,5".
+  val keep = match args
+    Cons(_, Cons(_, Cons(_, Cons(_, Cons(k, _))))) | k != "all" ->
+      Just(k.split(",").map(fn(s) s.parse-int.default(-1)).filter(fn(i) i >= 0))
+    _ -> Nothing
 
-  val (prog, expected, viol) = generate(seed, size, lvl, mutate, 0)
+  val (prog, expected, viol, n) = generate(seed, size, lvl, mutate, keep, 0)
   println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show ++ " mutate=" ++ mutate.show)
+  println("// stmts: " ++ n.show)
   println("// violations: " ++ (if viol == "" then "none" else viol))
   show-fstmts(prog, "", lvl).foreach(println)
   expected.foreach(fn(line) println("// expect: " ++ line))

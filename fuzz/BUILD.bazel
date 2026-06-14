@@ -210,3 +210,36 @@ sh_test(
     data = _DIFF_E4_DATA,
     timeout = "moderate",
 )
+
+# Delta-debugging reducer (see docs/FUZZING.md):
+#   bazel run //fuzz:reduce_e4 -- <seed> <size> <mutate>
+# Shrinks a failing efuzz program (against e4peg) to a minimal repro.
+sh_binary(
+    name = "reduce_e4",
+    srcs = ["reduce.sh"],
+    args = [
+        "$(location //src:efuzz)",
+        "$(location //src:e4peg)",
+        "4",
+    ],
+    data = [
+        "//src:efuzz",
+        "//src:e4peg",
+        "//src:e4.peg",
+    ],
+)
+
+sh_binary(
+    name = "reduce_e3",
+    srcs = ["reduce.sh"],
+    args = [
+        "$(location //src:efuzz)",
+        "$(location //src:e3peg)",
+        "3",
+    ],
+    data = [
+        "//src:efuzz",
+        "//src:e3peg",
+        "//src:e3.peg",
+    ],
+)

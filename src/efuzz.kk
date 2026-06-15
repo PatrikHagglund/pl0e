@@ -1,10 +1,14 @@
-// efuzz: random e1-e5 program generator with co-evaluation (docs/FUZZING.md)
+// efuzz: random e1-e6 program generator with co-evaluation (docs/FUZZING.md)
 //
 // Generates well-defined programs (termination by construction) together
 // with their expected output, for differential testing across implementations.
 //
 // Usage: efuzz [seed] [size] [level] [mutate] [keep]
-//   level:  1..5 (default 1); 5 adds records/field-access/record-patterns
+//   level:  1..6 (default 1); 5 adds records/field-access/record-patterns;
+//           6 adds type annotations (typed bindings/decls) and is well-typed
+//           by construction, so e6peg's static checker must accept it (the
+//           type-check oracle). No closures at level 6 yet (e6 lambdas need
+//           typed params — a follow-up).
 //   mutate: semantics-preserving mutation passes (default 0)
 //   keep:   "all" (default) | "none" | "0,2,5" — body statements to keep
 //           (reducer); the kept program is re-co-evaluated for its oracle
@@ -84,6 +88,10 @@ type fpat
 type fstmt
   FDecl(name: string)
   FAssign(name: string, e: fexpr)
+  // Typed binding `name : ty = e` (level 6). ty is a type string the
+  // generator already knows ("int", "bool", "[int]", "{f0: int, ...}").
+  // Runtime-equivalent to FAssign; the annotation is for e6's checker.
+  FTBind(name: string, ty: string, e: fexpr)
   FPrint(e: fexpr)
   // Counter-down loop; early is an optional early-break guard (level 2+;
   // bool-typed at level 4, where it is emitted as a scrutinee case).
@@ -369,11 +377,14 @@ fun gen-assign(st: genst, lvl: int): div (genst, list<fstmt>)
     elif lvl >= 4 && q < 18 && !st4.avars.is-nil then gen-casepe(st4, lvl)
     else gen-iexpr(st4, 3, lvl)
   val st6 = if st5.ivars.find(fn(v) v == name).is-just then st5 else st5.add-ivar(name)
+  // Level 6: the primary binding is typed (`name : int = e`); the
+  // accumulator update stays a plain reassignment (`acc := ...`).
+  val bind = if lvl >= 6 then FTBind(name, "int", e) else FAssign(name, e)
   val (st7, mix) = pick(st6, 100)
   if mix < 50 then
-    (st7, [FAssign(name, e), FAssign("acc", FAdd(FVar("acc"), FVar(name)))])
+    (st7, [bind, FAssign("acc", FAdd(FVar("acc"), FVar(name)))])
   else
-    (st7, [FAssign(name, e)])
+    (st7, [bind])
 
 // Pattern-case expression (level 4): may have no matching arm, which is
 // erroneous (nomatch) — deliberately generatable for the enforce oracle.
@@ -393,8 +404,8 @@ fun gen-pe-arms(st: genst, lvl: int, n: int): div (genst, list<(fpat, fexpr)>)
     val (st2, p) =
       if n == 1 then  // last arm: often (not always) a catch-all wildcard
         val (sta, q) = pick(st, 100)
-        if q < 60 then (sta, PWildP) else gen-pat(sta)
-      else gen-pat(st)
+        if q < 60 then (sta, PWildP) else gen-pat(sta, lvl)
+      else gen-pat(st, lvl)
     val saved = st2
     val st3 = add-pat-vars(st2, p)
     val (st4, body) = gen-iexpr(st3, 2, lvl)
@@ -403,7 +414,10 @@ fun gen-pe-arms(st: genst, lvl: int, n: int): div (genst, list<(fpat, fexpr)>)
     (st6, Cons((p, body), rest))
 
 // A pattern over arrays: exact (a; b;), prefix (a; _), int literal, or var.
-fun gen-pat(st: genst): div (genst, fpat)
+// At e6 the int-literal alternative is dropped: e6's static checker rejects
+// an int pattern against an array scrutinee (at e4/e5 it is merely a
+// never-matching arm, which is harmless coverage).
+fun gen-pat(st: genst, lvl: int): div (genst, fpat)
   val (st2, r) = pick(st, 100)
   if r < 70 then
     val (st3, k) = pick(st2, 3)
@@ -419,7 +433,7 @@ fun gen-pat(st: genst): div (genst, fpat)
           val (st6, name) = fresh(st5, "m")
           (st6, PArrP(Cons(PVarP(name), rrest).reverse, False))
         _ -> (st5, PArrP(elems, False))
-  elif r < 85 then
+  elif r < 85 && lvl <= 5 then
     val (st3, n) = pick(st2, 5)
     (st3, PLitP(n))  // int literal: an array scrutinee never matches it
   else
@@ -499,19 +513,22 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
         (sta, mv.default("b0"))
     val (st5, e) = gen-bexpr(st4, 2, lvl)
     val st6 = if st5.bvars.find(fn(v) v == name).is-just then st5 else st5.add-bvar(name)
-    (st6, [FAssign(name, e)])
-  elif lvl >= 3 && r < 60 then gen-lambda(st2, lvl)
+    (st6, [if lvl >= 6 then FTBind(name, "bool", e) else FAssign(name, e)])
+  // Closures only at e3-e5: e6 lambdas require typed params (deferred).
+  elif lvl >= 3 && lvl <= 5 && r < 60 then gen-lambda(st2, lvl)
   elif lvl >= 4 && r < 66 then
     val (st3, name) = fresh(st2, "a")
     val (st4, k) = pick(st3, 4)
     val (st5, elems) = gen-args(st4, 2, lvl, k + 1)
-    (st5.add-avar(name), [FAssign(name, FArr(elems))])
+    (st5.add-avar(name), [if lvl >= 6 then FTBind(name, "[int]", FArr(elems)) else FAssign(name, FArr(elems))])
   elif lvl >= 5 && r < 70 then
     val (st3, name) = fresh(st2, "r")
     val (st4, nf) = pick(st3, 3)
     val nfields = nf + 1
     val (st5, fields) = gen-rec-fields(st4, lvl, nfields, 0)
-    (st5.add-rvar(name, nfields), [FAssign(name, FRecLit(fields))])
+    val bind = if lvl >= 6 then FTBind(name, rec-type-str(nfields), FRecLit(fields))
+               else FAssign(name, FRecLit(fields))
+    (st5.add-rvar(name, nfields), [bind])
   elif r < 80 && depth < 2 then
     val saved = st2
     val (st3, counter) = fresh(st2, "c")
@@ -536,7 +553,12 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     elif lvl >= 2 && lvl <= 3 && q < 50 then gen-case(st3, depth, lvl)
     else
       val saved = st3
-      val (st4, mv) = pick-from(st3, st3.ivars ++ st3.bvars ++ st3.ros)
+      // The FIf condition is emitted as a scrutinee case at level 4+. At
+      // level 6 the static checker requires the case-arm patterns to match
+      // the scrutinee's type, and the emission uses an int (0) pattern, so
+      // restrict the condition to int there (e4/e5 also allow bool conds).
+      val pool = if lvl >= 6 then st3.ivars ++ st3.ros else st3.ivars ++ st3.bvars ++ st3.ros
+      val (st4, mv) = pick-from(st3, pool)
       val (st5, body) = gen-stmts(st4, depth + 1, lvl)
       (st5.restore-vars(saved), [FIf(mv.default("acc"), body)])
   else gen-assign(st2, lvl)
@@ -548,6 +570,10 @@ fun gen-rec-fields(st: genst, lvl: int, nfields: int, i: int): div (genst, list<
     val (st2, e) = gen-iexpr(st, 2, lvl)
     val (st3, rest) = gen-rec-fields(st2, lvl, nfields, i + 1)
     (st3, Cons(("f" ++ i.show, e), rest))
+
+// e6 record type string for a record with `nfields` int fields: "{f0: int, ...}"
+fun rec-type-str(nfields: int): string
+  "{" ++ list(0, nfields - 1).map(fn(i) "f" ++ i.show ++ ": int").join(", ") ++ "}"
 
 // Pattern-case on a record variable (level 5), reusing FCaseP with record
 // patterns. Bindings (int field binders) persist after the taken arm.
@@ -620,8 +646,8 @@ fun gen-p-arms(st: genst, depth: int, lvl: int, n: int): div (genst, list<(fpat,
     val (st2, p) =
       if n == 1 then  // last arm: usually a catch-all wildcard
         val (sta, q) = pick(st, 100)
-        if q < 70 then (sta, PWildP) else gen-pat(sta)
-      else gen-pat(st)
+        if q < 70 then (sta, PWildP) else gen-pat(sta, lvl)
+      else gen-pat(st, lvl)
     val saved = st2
     val st3 = add-pat-vars(st2, p)
     val (st4, nb) = pick(st3, 2)
@@ -906,6 +932,9 @@ fun fexec(e: fenv, s: fstmt, out: list<string>, m: int): <div,exn,viol-flag> (fe
     FAssign(x, ex) ->
       val v = feval(e, ex)
       (fset(e, x, v), out, mag(m, v))
+    FTBind(x, _, ex) ->  // typed binding: runtime-equivalent to assignment
+      val v = feval(e, ex)
+      (fset(e, x, v), out, mag(m, v))
     FPrint(ex) ->
       val v = feval(e, ex)
       (e, Cons(show-rv(v), out), mag(m, v))
@@ -1025,8 +1054,9 @@ fun show-fpat(p: fpat): div string
 
 fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
   match s
-    FDecl(x) -> [ind ++ x ++ ":"]
+    FDecl(x) -> [ind ++ x ++ (if lvl >= 6 then " : int" else ":")]  // e6 has no untyped decl
     FAssign(x, e) -> [ind ++ x ++ " := " ++ show-fexpr(e)]
+    FTBind(x, ty, e) -> [ind ++ x ++ " : " ++ ty ++ " = " ++ show-fexpr(e)]
     FPrint(e) -> [ind ++ "print " ++ show-fexpr(e)]
     FLoop(c, b, early, body) ->
       if lvl >= 4 then
@@ -1068,7 +1098,16 @@ fun show-fstmt(s: fstmt, ind: string, lvl: int): div list<string>
           ++ [ind ++ "  " ++ c ++ " := " ++ c ++ " - 1",
               ind ++ "}"]
     FIf(cond, body) ->
-      if lvl >= 4 then
+      if lvl >= 6 then
+        // e6's checker requires arm patterns to match the scrutinee type;
+        // the condition is int here (restricted in the generator).
+        [ind ++ "case " ++ cond ++ " {",
+         ind ++ "  0 -> { }",
+         ind ++ "  _ -> {"]
+          ++ show-fstmts(body, ind ++ "    ", lvl)
+          ++ [ind ++ "  }",
+              ind ++ "}"]
+      elif lvl >= 4 then
         // Works for int and bool conditions: 0 and false skip the body,
         // anything else falls to the wildcard arm (truthy semantics).
         [ind ++ "case " ++ cond ++ " {",
@@ -1249,6 +1288,9 @@ fun mut-stmt(st: genst, s: fstmt): div (genst, fstmt)
     FAssign(n, e) ->
       val (s2, e2) = mut-expr(st, e)
       (s2, FAssign(n, e2))
+    FTBind(n, ty, e) ->
+      val (s2, e2) = mut-expr(st, e)
+      (s2, FTBind(n, ty, e2))
     FPrint(e) ->
       val (s2, e2) = mut-expr(st, e)
       (s2, FPrint(e2))

@@ -1,6 +1,7 @@
 # Fuzzing: Adapting llvm-fuzzgen to eN
 
-Status: Phase 1 implemented (e1 generator + diff driver). Phases 2-4 planned.
+Status: generator + diff drivers implemented for e1-e6, plus the Phase 4
+mutator and reducer. See the per-phase breakdown below.
 
 ## Usage
 
@@ -8,8 +9,9 @@ Status: Phase 1 implemented (e1 generator + diff driver). Phases 2-4 planned.
 bazel run //fuzz:diff                        # e1: 20 seeds, size 20
 bazel run //fuzz:diff -- -- 100 1 40        # e1: 100 seeds starting at 1, size 40
 bazel run //fuzz:diff_e2 -- -- 100 1 30     # e2: e2peg vs e3peg vs expected
+bazel run //fuzz:diff_e6 -- -- 100 1 16 3   # e6: e6peg + type-check oracle, mutated
 bazel test //fuzz:efuzz_smoke //fuzz:efuzz_e2_smoke   # quick CI checks
-bazel run //src:efuzz -- 42 20 2            # print one generated program (level 2)
+bazel run //src:efuzz -- 42 20 6            # print one generated program (level 6)
 ```
 
 `//src:efuzz` prints a random well-defined e1 program with its expected
@@ -237,6 +239,31 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
      `RRec`; the mutator and reducer handle the new nodes. Fields are
      int-only for now (bool/nested fields are a follow-up). Validated:
      300 e5 seeds (pure + mutated), 0 failures.
+   - **e6** ✅ Done (`efuzz [seed] [size] 6`, `bazel run //fuzz:diff_e6`).
+     Typed bindings (`x : int = e`, `x : bool = e`, `xs : [int] = (...)`,
+     `r : {f0: int, ...} = {...}`) and typed declarations (`x : int`),
+     emitted by reusing the e5 generator with a level-6 syntax switch
+     (`FTBind`). Closures are gated out of level 6 (no typed-lambda
+     emission yet — a follow-up), and `if`/`case` conditions are restricted
+     to `int` scrutinees so the int-only `case cond { 0 -> {} _ -> {...} }`
+     lowering stays well-typed. **New oracle — the type-check oracle:**
+     generated programs are well-typed by construction, so e6peg's static
+     checker must accept them; the driver fails on any `Static error`
+     (a wrongly-rejected valid program is a checker bug; an ill-typed
+     emission is a generator bug). This cross-checks the generator's type
+     discipline against an independent checker, and immediately found two
+     discrepancies, both fixed in the generator:
+     - **int patterns against array scrutinees:** the array pattern-case
+       emitted int-literal patterns (`PLitP`) against `[int]` scrutinees —
+       harmless dynamically at e4/e5 but rejected by e6's static checker
+       (`expected int, got [int]`). Fixed by threading the level into
+       `gen-pat` and gating literal patterns to `lvl <= 5`.
+     - **mixed int+bool case arms:** the `if`-lowering emitted
+       `case acc { 0 -> {} false -> {} _ -> {...} }`, mixing `int` and
+       `bool` patterns against one scrutinee. Fixed by restricting the
+       level-6 `if` condition to `int` and emitting an int-only `case`.
+     Validated: 300 e6 seeds (150 pure + 150 mutated), 0 failures,
+     0 static-errors.
 4. **Phase 4 — mutator.** ✅ Done (`efuzz [seed] [size] [level] [mutate]`,
    4th arg = mutation passes; drivers take a 4th `MUTATE` arg). The
    mutator applies semantics- AND type-preserving rewrites to a generated
@@ -268,13 +295,17 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    Still open: the PEG `--stats` fuel-regression mode (its original
    motivating case, e4 paren backtracking, is already fixed); finer
    (nested) reduction granularity; reducing against the enforce oracle.
-5. **Later (as e5/e6 interpreters land)** — records/unit, then static
-   typing. e6 adds a new oracle: well-typed-by-construction programs
-   must type-check; deliberately ill-typed mutations must be rejected.
+5. **Phase 5 — records/unit (e5) and static typing (e6).** ✅ Done
+   (see the e5/e6 entries under Phase 3). e6 added the type-check oracle:
+   well-typed-by-construction programs must pass e6peg's static checker.
+   Still open — the *ill-typed* mutator: type-breaking mutations that
+   e6peg must reject with `Static error` (the dual oracle), plus typed
+   closures at e6 and bool/nested record fields (see TODO.md).
 
 Note (superset deviations, see above): per-level diff matrices are
 e1 → {e1, e1_koka, e1peg, LLVM JIT, cpp-emit}, e2 → {e2peg, e3peg},
-e3 → {e3peg}, e4 → {e4peg}.
+e3 → {e3peg}, e4 → {e4peg}, e5 → {e5peg}, e6 → {e6peg + static-checker
+oracle}.
 
 ## Open questions
 

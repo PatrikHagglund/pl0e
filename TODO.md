@@ -2,8 +2,14 @@
 
 ## Next
 
-- efuzz e6 oracle: well-typed-by-construction programs must pass e6peg's
-  static checker; ill-typed mutants must be rejected with "Static error"
+- ~~efuzz e6 oracle: well-typed-by-construction programs must pass e6peg's
+  static checker~~ DONE (2026-06-15): //fuzz:diff_e6 fails on any
+  "Static error". Found+fixed two generator/checker discrepancies
+  (int-pattern-vs-array scrutinee; mixed int+bool case arms). 300 seeds
+  (pure+mutated), 0 fails, 0 static-errors. Remaining: the *ill-typed*
+  mutator — type-breaking mutations that e6peg MUST reject with "Static
+  error" (the dual oracle); typed closures at e6 (need typed-param
+  emission + threading lvl into show-fexpr); bool/nested record fields
 - e6 design notes to revisit: no recursive types (so the Y combinator does
   not type-check — recursion is loops-only at e6); record types are
   invariant (no width subtyping in expressions, though record *patterns*
@@ -18,8 +24,10 @@
   width subtyping), RRec in the co-evaluator, mutator+reducer support,
   //fuzz:diff_e5 + smokes + reduce_e5 + CI rolling. 300 seeds, 0 fails.
   Follow-up: bool/nested record fields.
-- efuzz e6: extend the generator to e6 (typed bindings, type decls, typed
-  lambda params) for the type-check oracle below. Builds on e5 gen.
+- ~~efuzz e6: extend the generator to e6 (typed bindings, type decls)~~
+  DONE (2026-06-15): typed bindings (FTBind: int/bool/[int]/record),
+  typed decls, closures gated out of e6, int-only if/case lowering.
+  Typed lambda params at e6 still TODO (see oracle item above).
 - ~~efuzz Phase 4 mutator~~ DONE (2026-06-14): semantics+type-preserving
   rewrites, self-validating, level-safe. `efuzz ... [mutate]` + drivers'
   4th MUTATE arg; pure+mutated smokes gated, rolling CI campaigns mutated.

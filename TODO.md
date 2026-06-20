@@ -14,8 +14,14 @@
   strategies (retype an existing binding; or inject a poison print with an
   ill-typed argument), ~10 distinct checker messages, negative control
   verified. 100 seeds, 0 fails.
-  Remaining e6 follow-ups: typed closures at e6 (need typed-param
-  emission + threading lvl into show-fexpr); bool/nested record fields
+- ~~typed closures at e6~~ DONE (2026-06-20): closures generate at e6 with
+  typed params (`\p: int -> ...`, via a `typed` flag on FLam) and are bound
+  by plain assignment (e6 infers the function type from the RHS); the
+  `lvl <= 5` gate is removed. Applications (`f (a) (b)`) exercise the
+  checker's apply path. Validated across all three e6 oracles (value+type
+  / mutated / ill-typed), 0 fails; 55/60 seeds define a closure, 35/60
+  apply one.
+  Remaining e6 follow-up: bool/nested record fields (also applies to e5)
 - e6 design notes to revisit: no recursive types (so the Y combinator does
   not type-check — recursion is loops-only at e6); record types are
   invariant (no width subtyping in expressions, though record *patterns*

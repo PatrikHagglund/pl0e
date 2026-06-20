@@ -5,10 +5,9 @@
 //
 // Usage: efuzz [seed] [size] [level] [mutate] [keep]
 //   level:  1..6 (default 1); 5 adds records/field-access/record-patterns;
-//           6 adds type annotations (typed bindings/decls) and is well-typed
-//           by construction, so e6peg's static checker must accept it (the
-//           type-check oracle). No closures at level 6 yet (e6 lambdas need
-//           typed params — a follow-up).
+//           6 adds type annotations (typed bindings/decls, typed lambda
+//           params `\p: int -> ...`) and is well-typed by construction, so
+//           e6peg's static checker must accept it (the type-check oracle).
 //   mutate: semantics-preserving mutation passes (default 0); a NEGATIVE
 //           value selects ill-typed mode (e6 dual oracle) — emit a
 //           well-typed program with one injected type error, marked
@@ -71,7 +70,7 @@ type fexpr
   FOr(l: fexpr, r: fexpr)               // level 3+, short-circuit
   FNot(e: fexpr)                        // level 3+
   FCaseE(arms: list<(fexpr, fexpr)>)    // level 3 guard-style case expression
-  FLam(ps: list<string>, body: fexpr)   // level 3+, int params -> int body
+  FLam(ps: list<string>, body: fexpr, typed: bool)  // level 3+, int params -> int body; typed: e6 emits `\p: int -> ...`
   FApp(f: string, args: list<fexpr>)    // level 3+, full application of a named closure
   FArr(elems: list<fexpr>)              // level 4: int-element array literal
   FIdxDot(arr: string, i: int)          // level 4: arr.i (literal index, may be oob)
@@ -482,7 +481,9 @@ fun gen-lambda(st: genst, lvl: int): div (genst, list<fstmt>)
   val (st4, ps) = gen-params(st3, arity)
   val saved-ivars = st4.ivars
   val (st5, body) = gen-iexpr(st4.with-ivars(ps ++ saved-ivars), 3, lvl)
-  (st5.with-ivars(saved-ivars).add-fvar(name, arity), [FAssign(name, FLam(ps, body))])
+  // e6 infers the function type from the assignment RHS, so a plain assign
+  // works; the lambda itself carries typed params (`\p: int -> ...`).
+  (st5.with-ivars(saved-ivars).add-fvar(name, arity), [FAssign(name, FLam(ps, body, lvl >= 6))])
 
 fun gen-params(st: genst, n: int): div (genst, list<string>)
   if n <= 0 then (st, [])
@@ -517,8 +518,9 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     val (st5, e) = gen-bexpr(st4, 2, lvl)
     val st6 = if st5.bvars.find(fn(v) v == name).is-just then st5 else st5.add-bvar(name)
     (st6, [if lvl >= 6 then FTBind(name, "bool", e) else FAssign(name, e)])
-  // Closures only at e3-e5: e6 lambdas require typed params (deferred).
-  elif lvl >= 3 && lvl <= 5 && r < 60 then gen-lambda(st2, lvl)
+  // Closures at e3+: e6 lambdas carry typed params (`\p: int -> ...`) and
+  // are bound by plain assignment (e6 infers the function type from the RHS).
+  elif lvl >= 3 && r < 60 then gen-lambda(st2, lvl)
   elif lvl >= 4 && r < 66 then
     val (st3, name) = fresh(st2, "a")
     val (st4, k) = pick(st3, 4)
@@ -803,7 +805,7 @@ fun feval(e: fenv, ex: fexpr): <div,exn,viol-flag> rv
           Cons((_, v), _) -> v
           Nil -> throw("efuzz internal error: missing field " ++ fld)
         _ -> throw("efuzz internal error: record expected")
-    FLam(ps, body) -> RClos(ps, body, e)  // captures environment at creation
+    FLam(ps, body, _) -> RClos(ps, body, e)  // captures environment at creation
     FApp(f, args) ->
       match fget(e, f)
         RClos(ps, body, cenv) ->
@@ -1031,7 +1033,9 @@ fun show-fexpr(ex: fexpr): div string
     FBool(b) -> if b then "true" else "false"
     FNeg(e) -> "-" ++ show-atom(e)
     FNot(e) -> "!" ++ show-atom(e)
-    FLam(ps, body) -> "\\" ++ ps.join(", ") ++ " -> " ++ show-fexpr(body)
+    FLam(ps, body, typed) ->
+      val params = if typed then ps.map(fn(p) p ++ ": int").join(", ") else ps.join(", ")
+      "\\" ++ params ++ " -> " ++ show-fexpr(body)
     FCaseE(arms) ->
       "case { " ++ arms.map(fn((g, b)) show-fexpr(g) ++ " -> " ++ show-fexpr(b)).join(", ") ++ " }"
     FArr(elems) -> "(" ++ elems.map(show-fexpr).join("; ") ++ ";)"
@@ -1217,9 +1221,9 @@ fun mut-expr(st: genst, e: fexpr): div (genst, fexpr)
     FCaseE(arms) ->
       val (s, arms2) = mut-epairs(st, arms)
       (s, FCaseE(arms2))
-    FLam(ps, body) ->
+    FLam(ps, body, typed) ->
       val (s, b2) = mut-expr(st, body)
-      (s, FLam(ps, b2))
+      (s, FLam(ps, b2, typed))
     FApp(f, args) ->
       val (s, a2) = mut-elist(st, args)
       (s, FApp(f, a2))

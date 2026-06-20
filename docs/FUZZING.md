@@ -244,10 +244,12 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
      Typed bindings (`x : int = e`, `x : bool = e`, `xs : [int] = (...)`,
      `r : {f0: int, ...} = {...}`) and typed declarations (`x : int`),
      emitted by reusing the e5 generator with a level-6 syntax switch
-     (`FTBind`). Closures are gated out of level 6 (no typed-lambda
-     emission yet — a follow-up), and `if`/`case` conditions are restricted
-     to `int` scrutinees so the int-only `case cond { 0 -> {} _ -> {...} }`
-     lowering stays well-typed. **New oracle — the type-check oracle:**
+     (`FTBind`). Closures carry typed params at e6 (`\p: int -> ...`) and
+     are bound by plain assignment — e6's checker infers the function type
+     from the RHS, so no binding annotation is needed; closure applications
+     (`f (a) (b)`) exercise the checker's apply path. `if`/`case` conditions
+     are restricted to `int` scrutinees so the int-only
+     `case cond { 0 -> {} _ -> {...} }` lowering stays well-typed. **New oracle — the type-check oracle:**
      generated programs are well-typed by construction, so e6peg's static
      checker must accept them; the driver fails on any `Static error`
      (a wrongly-rejected valid program is a checker bug; an ill-typed
@@ -320,7 +322,8 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    (see the e5/e6 entries under Phase 3). e6 added both halves of the
    type oracle: well-typed-by-construction programs must pass e6peg's
    static checker, and the ill-typed mutator's poisoned programs must be
-   rejected with `Static error`. Still open — typed closures at e6 and
+   rejected with `Static error`. Typed closures are generated at e6
+   (`\p: int -> ...`, applications included). Still open —
    bool/nested record fields (see TODO.md).
 
 Note (superset deviations, see above): per-level diff matrices are

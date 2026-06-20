@@ -6,9 +6,15 @@
   static checker~~ DONE (2026-06-15): //fuzz:diff_e6 fails on any
   "Static error". Found+fixed two generator/checker discrepancies
   (int-pattern-vs-array scrutinee; mixed int+bool case arms). 300 seeds
-  (pure+mutated), 0 fails, 0 static-errors. Remaining: the *ill-typed*
-  mutator — type-breaking mutations that e6peg MUST reject with "Static
-  error" (the dual oracle); typed closures at e6 (need typed-param
+  (pure+mutated), 0 fails, 0 static-errors.
+- ~~efuzz e6 ill-typed mutator (the dual oracle)~~ DONE (2026-06-20):
+  `efuzz ... 6 -1` emits a well-typed program with one injected type
+  error (marked "// expect-static-error: yes"); e6peg must reject it with
+  "Static error". //fuzz:diff_e6_illtyped + smoke + rolling CI step. Two
+  strategies (retype an existing binding; or inject a poison print with an
+  ill-typed argument), ~10 distinct checker messages, negative control
+  verified. 100 seeds, 0 fails.
+  Remaining e6 follow-ups: typed closures at e6 (need typed-param
   emission + threading lvl into show-fexpr); bool/nested record fields
 - e6 design notes to revisit: no recursive types (so the Y combinator does
   not type-check — recursion is loops-only at e6); record types are

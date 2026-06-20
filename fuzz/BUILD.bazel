@@ -313,6 +313,25 @@ sh_binary(
     ],
 )
 
+# Ill-typed fuzzing for e6 (the dual of the type-check oracle): efuzz emits
+# well-typed programs with one injected type error; e6peg must reject each
+# with "Static error".
+#   bazel run //fuzz:diff_e6_illtyped -- -- <count> <start-seed> <size>
+sh_binary(
+    name = "diff_e6_illtyped",
+    srcs = ["e6_illtyped.sh"],
+    args = _DIFF_E6_ARGS,
+    data = _DIFF_E6_DATA,
+)
+
+sh_test(
+    name = "efuzz_e6_illtyped_smoke",
+    srcs = ["e6_illtyped.sh"],
+    args = _DIFF_E6_ARGS + ["--", "10", "1", "15"],
+    data = _DIFF_E6_DATA,
+    timeout = "moderate",
+)
+
 # Delta-debugging reducer (see docs/FUZZING.md):
 #   bazel run //fuzz:reduce_e4 -- <seed> <size> <mutate>
 # Shrinks a failing efuzz program (against e4peg) to a minimal repro.

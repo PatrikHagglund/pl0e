@@ -9,7 +9,10 @@
 //           by construction, so e6peg's static checker must accept it (the
 //           type-check oracle). No closures at level 6 yet (e6 lambdas need
 //           typed params — a follow-up).
-//   mutate: semantics-preserving mutation passes (default 0)
+//   mutate: semantics-preserving mutation passes (default 0); a NEGATIVE
+//           value selects ill-typed mode (e6 dual oracle) — emit a
+//           well-typed program with one injected type error, marked
+//           "// expect-static-error: yes", which e6peg must reject
 //   keep:   "all" (default) | "none" | "0,2,5" — body statements to keep
 //           (reducer); the kept program is re-co-evaluated for its oracle
 //
@@ -1346,6 +1349,72 @@ fun mutate-prog(seed: int, prog: list<fstmt>, passes: int): div list<fstmt>
     p := p2
   p
 
+// === Ill-typed mutator (efuzz e6 dual oracle) ===
+// The complement of the type-check oracle: take a well-typed e6 program and
+// inject exactly ONE guaranteed type error, so e6peg's static checker MUST
+// reject it with "Static error". If it does not (the program runs, or the
+// checker stays silent), either the checker has a hole or this mutator's
+// "error" was not actually ill-typed — both are real findings.
+//
+// Every strategy is statically ill-typed regardless of runtime values, so a
+// poisoned program is NEVER co-evaluated (feval assumes well-typedness and
+// would itself fault). e6peg checks statements one at a time, so a poison
+// statement reached after some well-typed (and side-effecting) statements
+// still trips the checker; the driver only requires a "Static error" line.
+
+// Each poison print hits a distinct check-expr path (see e6peg check-expr).
+val poison-exprs = [
+  FNot(FLit(0)),                     // operand of '!': expected bool, got int
+  FNeg(FBool(True)),                 // operand of unary '-': expected int, got bool
+  FAdd(FBool(True), FLit(1)),        // left operand of '+': expected int, got bool
+  FAnd(FLit(1), FLit(2)),            // left operand of '&&': expected bool, got int
+  FCmp("==", FLit(1), FBool(True)),  // '==' on different types: int and bool
+]
+
+// Flip a typed binding's annotation to one its initializer cannot satisfy:
+// "int" -> "bool" (got int, expected bool); any other (bool/[int]/record)
+// -> "int". Either way declared type and initializer type disagree, so the
+// STypedBind check fails.
+fun flip-ty(ty: string): string
+  if ty == "int" then "bool" else "int"
+
+// Retype the first top-level typed binding; (applied?, statements).
+fun flip-first-tbind(ss: list<fstmt>): (bool, list<fstmt>)
+  match ss
+    Nil -> (False, [])
+    Cons(FTBind(x, ty, e), rest) -> (True, Cons(FTBind(x, flip-ty(ty), e), rest))
+    Cons(s, rest) ->
+      val (done, r2) = flip-first-tbind(rest)
+      (done, Cons(s, r2))
+
+// Insert a poison `print` just before the program's final statement (the
+// harness `print acc`), so the checker reaches it after the well-typed body.
+fun insert-poison-print(prog: list<fstmt>, p: fexpr): list<fstmt>
+  match prog.reverse
+    Cons(last, body-rev) -> body-rev.reverse ++ [FPrint(p), last]
+    Nil -> [FPrint(p)]
+
+fun illtype-prog(seed: int, prog: list<fstmt>): div list<fstmt>
+  val st = Genst(seed * 104729 + 11, 0, [], [], [], [], [], [])
+  val (st2, choice) = pick(st, 2)
+  // Prefer retyping an existing binding (a more authentic mutation); fall
+  // back to a poison print when the program has no typed binding to retype.
+  match (if choice == 0 then flip-first-tbind(prog) else (False, prog))
+    (True, p) -> p
+    (False, _) ->
+      val (_st3, k) = pick(st2, poison-exprs.length)
+      insert-poison-print(prog, poison-exprs.drop(k).head.default(FNot(FLit(0))))
+
+// Generate a well-typed program (cap-checked like generate) and poison it.
+fun gen-illtyped(seed: int, size: int, lvl: int, attempt: int): <div,exn> (list<fstmt>, int)
+  val prog0 = gen-program(seed * 1000 + attempt * 137, size, lvl)
+  val (_out, m, _viol) = run-program(prog0)
+  if m > mag-cap then
+    if attempt < 9 then gen-illtyped(seed, size, lvl, attempt + 1)
+    else throw("efuzz: magnitude cap exceeded on all attempts for seed " ++ seed.show)
+  else
+    (illtype-prog(seed, prog0), body-count(prog0))
+
 // === Reducer support (efuzz Phase 4): keep mask ===
 // A program is [acc := 0] ++ body ++ [print acc]. The reducer shrinks it by
 // keeping only a subset of body statements (by 0-based index); efuzz then
@@ -1417,9 +1486,18 @@ pub fun main()
       Just(k.split(",").map(fn(s) s.parse-int.default(-1)).filter(fn(i) i >= 0))
     _ -> Nothing
 
-  val (prog, expected, viol, n) = generate(seed, size, lvl, mutate, keep, 0)
-  println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show ++ " mutate=" ++ mutate.show)
-  println("// stmts: " ++ n.show)
-  println("// violations: " ++ (if viol == "" then "none" else viol))
-  show-fstmts(prog, "", lvl).foreach(println)
-  expected.foreach(fn(line) println("// expect: " ++ line))
+  if mutate < 0 then
+    // Ill-typed mode (e6 dual oracle): emit a well-typed program with one
+    // injected type error; the driver requires e6peg to print "Static error".
+    val (prog, n) = gen-illtyped(seed, size, lvl, 0)
+    println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show ++ " mutate=illtyped")
+    println("// stmts: " ++ n.show)
+    println("// expect-static-error: yes")
+    show-fstmts(prog, "", lvl).foreach(println)
+  else
+    val (prog, expected, viol, n) = generate(seed, size, lvl, mutate, keep, 0)
+    println("// efuzz seed=" ++ seed.show ++ " size=" ++ size.show ++ " level=" ++ lvl.show ++ " mutate=" ++ mutate.show)
+    println("// stmts: " ++ n.show)
+    println("// violations: " ++ (if viol == "" then "none" else viol))
+    show-fstmts(prog, "", lvl).foreach(println)
+    expected.foreach(fn(line) println("// expect: " ++ line))

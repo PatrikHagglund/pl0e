@@ -10,6 +10,7 @@ bazel run //fuzz:diff                        # e1: 20 seeds, size 20
 bazel run //fuzz:diff -- -- 100 1 40        # e1: 100 seeds starting at 1, size 40
 bazel run //fuzz:diff_e2 -- -- 100 1 30     # e2: e2peg vs e3peg vs expected
 bazel run //fuzz:diff_e6 -- -- 100 1 16 3   # e6: e6peg + type-check oracle, mutated
+bazel run //fuzz:diff_e6_illtyped -- -- 100 1 16  # e6: dual oracle — must reject ill-typed
 bazel test //fuzz:efuzz_smoke //fuzz:efuzz_e2_smoke   # quick CI checks
 bazel run //src:efuzz -- 42 20 6            # print one generated program (level 6)
 ```
@@ -264,6 +265,26 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
        level-6 `if` condition to `int` and emitting an int-only `case`.
      Validated: 300 e6 seeds (150 pure + 150 mutated), 0 failures,
      0 static-errors.
+
+     **Ill-typed mutator (the dual oracle)** ✅ Done
+     (`efuzz [seed] [size] 6 -1`, `bazel run //fuzz:diff_e6_illtyped`). A
+     negative `mutate` arg selects ill-typed mode: efuzz generates a
+     well-typed e6 program and injects exactly ONE guaranteed type error,
+     marked `// expect-static-error: yes`. e6peg's static checker must then
+     reject it with `Static error`; a clean run with no such line means the
+     checker accepted an ill-typed program (a hole). Two complementary,
+     always-static strategies (chosen by RNG): retype an existing typed
+     binding so its annotation contradicts its initializer (int↔bool,
+     int↔`[int]`, int↔record), or — when there is no binding to retype —
+     inject a poison `print` whose argument is ill-typed (`!0`, `-true`,
+     `true + 1`, `1 && 2`, `1 == true`), each hitting a distinct
+     `check-expr` path. Poisoned programs are deliberately NOT co-evaluated
+     (they are ill-typed; the co-evaluator assumes well-typedness). Since
+     e6peg checks statements one at a time, the well-typed prefix may run
+     and print before the poisoned statement trips the checker — the oracle
+     only requires the `Static error` line to appear. Validated: 100 seeds,
+     0 failures; ~10 distinct checker messages exercised; negative control
+     confirmed (the un-poisoned program emits no `Static error`).
 4. **Phase 4 — mutator.** ✅ Done (`efuzz [seed] [size] [level] [mutate]`,
    4th arg = mutation passes; drivers take a 4th `MUTATE` arg). The
    mutator applies semantics- AND type-preserving rewrites to a generated
@@ -296,11 +317,11 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    motivating case, e4 paren backtracking, is already fixed); finer
    (nested) reduction granularity; reducing against the enforce oracle.
 5. **Phase 5 — records/unit (e5) and static typing (e6).** ✅ Done
-   (see the e5/e6 entries under Phase 3). e6 added the type-check oracle:
-   well-typed-by-construction programs must pass e6peg's static checker.
-   Still open — the *ill-typed* mutator: type-breaking mutations that
-   e6peg must reject with `Static error` (the dual oracle), plus typed
-   closures at e6 and bool/nested record fields (see TODO.md).
+   (see the e5/e6 entries under Phase 3). e6 added both halves of the
+   type oracle: well-typed-by-construction programs must pass e6peg's
+   static checker, and the ill-typed mutator's poisoned programs must be
+   rejected with `Static error`. Still open — typed closures at e6 and
+   bool/nested record fields (see TODO.md).
 
 Note (superset deviations, see above): per-level diff matrices are
 e1 → {e1, e1_koka, e1peg, LLVM JIT, cpp-emit}, e2 → {e2peg, e3peg},

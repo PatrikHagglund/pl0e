@@ -233,18 +233,20 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
        `koka_opts = ["--fno-specialize"]` attribute in rules_koka;
        reproduces in Koka v3.2.3 — worth reporting upstream.
    - **e5** ✅ Done (`efuzz [seed] [size] 5`, `bazel run //fuzz:diff_e5`).
-     Records: literals `{f0: e, ...}` with int **and bool** fields, field
-     access `r.f0` (routed to int or bool context by the field's type),
-     and record pattern-cases `case r { {f0: p, ...} -> ... }` with width
-     subtyping (a pattern lists a subset of fields; extras allowed),
-     reusing the level-4 scrutinee-case machinery. A field binder is typed
-     by its field (int field → int var, bool field → bool var); bool fields
-     take binder/wildcard sub-patterns only (there is no bool literal
-     pattern). Co-evaluator gains `RRec`; the mutator and reducer handle
-     the new nodes. Nested (record-valued) fields remain a follow-up — they
-     need chained field access (`r.f0.g0`), which `FField`'s string base
-     does not yet support. Validated: 250 e5 seeds (pure + mutated),
-     0 failures.
+     Records: literals `{f0: e, ...}` with int, bool, **and nested-record**
+     fields, field access (routed to the right context by the field's
+     type, descending into nested records — `FField`'s base is an
+     expression, so chained access `r.f0.f1` works), and record
+     pattern-cases `case r { {f0: p, ...} -> ... }` with width subtyping
+     (a pattern lists a subset of fields; extras allowed), reusing the
+     level-4 scrutinee-case machinery. A field binder is typed by its field
+     (int → int var, bool → bool var, record → record var, so its own
+     fields stay accessible); bool and record fields take binder/wildcard
+     sub-patterns only (there is no bool/record literal pattern). Field
+     types are tracked per record as an `ftype` tree (`FTInt`/`FTBool`/
+     `FTRec`); nesting is bounded to one level deep. Co-evaluator gains
+     `RRec`; the mutator and reducer handle the new nodes. Validated:
+     250 e5 seeds (pure + mutated), 0 failures.
    - **e6** ✅ Done (`efuzz [seed] [size] 6`, `bazel run //fuzz:diff_e6`).
      Typed bindings (`x : int = e`, `x : bool = e`, `xs : [int] = (...)`,
      `r : {f0: int, f1: bool, ...} = {...}`) and typed declarations (`x : int`),
@@ -328,9 +330,9 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
    type oracle: well-typed-by-construction programs must pass e6peg's
    static checker, and the ill-typed mutator's poisoned programs must be
    rejected with `Static error`. Typed closures are generated at e6
-   (`\p: int -> ...`, applications included), and records carry bool
-   fields as well as int (`{f0: int, f1: bool}`) at both e5 and e6. Still
-   open — nested (record-valued) record fields (see TODO.md).
+   (`\p: int -> ...`, applications included), and records carry int, bool,
+   and nested-record fields (`{f0: int, f1: {f0: bool}}`, chained access
+   `r.f1.f0`) at both e5 and e6.
 
 Note (superset deviations, see above): per-level diff matrices are
 e1 → {e1, e1_koka, e1peg, LLVM JIT, cpp-emit}, e2 → {e2peg, e3peg},

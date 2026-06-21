@@ -30,9 +30,16 @@
   `rvars`. The mutator stays type-preserving (recurses by node) and the
   ill-typed mutator's int↔bool flip still rejects. Validated across e5,
   e5-mutated, e6, e6-mutated, e6-ill-typed (600 seeds), 0 fails.
-  Remaining e6 follow-up: nested (record-valued) record fields — these need
-  chained field access (`r.f0.g0`), which `FField`'s string base does not
-  yet support (would need an expression base + show-fexpr change).
+- ~~efuzz e5/e6: nested (record-valued) record fields~~ DONE (2026-06-21):
+  `FField`'s base is now an expression, so chained access `r.f0.f1` works;
+  field types are tracked per record as an `ftype` tree
+  (`FTInt`/`FTBool`/`FTRec`), nesting bounded to one level. Field access
+  walks the tree to an int/bool leaf (`int-paths`/`bool-paths` +
+  `build-access`); record-type strings recurse (`rec-type-str`/
+  `ftype-str`); a record-typed pattern binder is tracked as a record var
+  so its own fields stay accessible. Validated across e5, e5-mutated, e6,
+  e6-mutated, e6-ill-typed (600 seeds), 0 fails; all 13 fuzz smokes pass.
+  e6 record fields are now feature-complete (int/bool/nested).
 - e6 design notes to revisit: no recursive types (so the Y combinator does
   not type-check — recursion is loops-only at e6); record types are
   invariant (no width subtyping in expressions, though record *patterns*
@@ -46,7 +53,8 @@
   records (int-field literals, field access, record pattern-cases with
   width subtyping), RRec in the co-evaluator, mutator+reducer support,
   //fuzz:diff_e5 + smokes + reduce_e5 + CI rolling. 300 seeds, 0 fails.
-  Follow-up: nested record fields (bool fields done 2026-06-21, above).
+  Follow-up: done — bool + nested record fields both landed 2026-06-21
+  (see the two DONE items above).
 - ~~efuzz e6: extend the generator to e6 (typed bindings, type decls)~~
   DONE (2026-06-15): typed bindings (FTBind: int/bool/[int]/record),
   typed decls, closures gated out of e6, int-only if/case lowering.

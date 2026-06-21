@@ -11,6 +11,8 @@ Interpreters and compilers for e0–e4.
 | `e2peg.kk` | Koka | Interpreter | e2 | Koka bigint |
 | `e3peg.kk` | Koka | Interpreter | e3 | Koka bigint |
 | `e4peg.kk` | Koka | Interpreter | e4 | Koka bigint |
+| `e5peg.kk` | Koka | Interpreter | e5 | Koka bigint |
+| `e6peg.kk` | Koka | Interpreter | e6 | Koka bigint |
 | `e1.cpp` | C++ | Interpreter | e1 | Configurable |
 | `e1_compile.cpp` | C++ | Compiler | e1 | Configurable |
 
@@ -55,12 +57,31 @@ Extends e3 with arrays and pattern matching. Arrays are stored as Koka vectors f
 bazel run //src:e4peg -- examples/factorial.e4
 ```
 
+**`e5peg.kk` — Single-Phase (e5):**
+Extends e4 with records (literals `{f0: e, ...}`, field access, record pattern-cases with width subtyping) and the unit value. Adds `RRec` to the runtime value type.
+
+```bash
+bazel run //src:e5peg -- examples/example.e5
+```
+
+**`e6peg.kk` — Single-Phase (e6):**
+Extends e5 with static typing: before execution, a structural type checker walks the program one statement at a time and prints `Static error: <msg>` (and halts) on a type error. Supports typed bindings/declarations, type definitions, and `int`/`bool`/`[int]`/record/function types.
+
+```bash
+bazel run //src:e6peg -- examples/example.e6
+```
+
+**Engine note (memoization):** the semantic-action path shared by all the
+`*peg` interpreters is packrat-memoized at rule boundaries (always on), keyed
+by `(rule, position)`, so overlapping-FIRST alternatives no longer re-parse
+exponentially on backtrack. See [PEG_SPEC.md](PEG_SPEC.md#memoization).
+
 **Known limitations:**
-- No recursive closures: closures capture the environment at definition time, so self-references fail
+- No recursive closures: closures capture the environment at definition time, so self-references fail (and e6 has no recursive types, so the Y-combinator does not type-check — recursion is loops-only)
 
 **Future work:**
 - Support recursion via late-binding or Y-combinator
-- Consider requiring explicit grouping for inline actions in PEG grammars (see `ACTION_SCOPE_RECOMMENDATION.md` in parent directory)
+- Inline-action scoping: backtracking *inside* a single rule's inline sequence is not separately memoized; prefer extracting a named rule (see PEG_SPEC.md "Grammar Design Guidelines")
 
 **`pegeval.kk` — Shared Runtime:**
 Parameterized `semval<x>` type allows level-specific extensions while sharing:
@@ -216,9 +237,12 @@ src/
   e2peg.kk       — Koka PEG interpreter (e2, ~50 lines)
   e3peg.kk       — Koka PEG interpreter (e3, closures/booleans)
   e4peg.kk       — Koka PEG interpreter (e4, arrays/pattern matching)
+  e5peg.kk       — Koka PEG interpreter (e5, records/unit)
+  e6peg.kk       — Koka PEG interpreter (e6, static type checking)
   e0peg.kk       — Koka PEG interpreter (e0, ~20 lines)
   pegeval.kk     — Shared PEG interpreter runtime
-  peg.kk         — Generic PEG parser
+  peg.kk         — Generic PEG parser (packrat-memoized exec path)
+  efuzz.kk       — Differential fuzzer / generator (see FUZZING.md)
 ```
 
 ## Code Style

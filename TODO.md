@@ -2,6 +2,19 @@
 
 ## Next
 
+- lvalue assignment paths (functional update) — IN PROGRESS (2026-06-21).
+  Design decided: `arr.i := e` etc. desugar to rebinding the base variable to
+  an updated copy (value semantics, no aliasing; root must be a variable);
+  see docs/DESIGN.md "lvalue Assignment: Functional Update".
+  - [x] e4 array element assignment (`arr.0 := e`, `arr (i) := e`, chained
+        `arr.0 (i) := e`); e4.peg `lpath` rule + `SAssignPath`/`update-path`;
+        7 e4_test cases; diff_e4 no-regression.
+  - [ ] e5 record field assignment (`rec.field := e`) + array assign carried
+        into e5; nested record/array paths.
+  - [ ] e6 type-checking of lvalue paths (component type must match RHS).
+  - [ ] efuzz: generate lvalue assignment, co-evaluate (functional update in
+        the oracle), mutator/reducer support → differential validation.
+  - [ ] specs (E3_SPEC or a note), FUZZING.md, examples.
 - ~~efuzz e6 oracle: well-typed-by-construction programs must pass e6peg's
   static checker~~ DONE (2026-06-15): //fuzz:diff_e6 fails on any
   "Static error". Found+fixed two generator/checker discrepancies

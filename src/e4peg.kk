@@ -37,10 +37,16 @@ pub type expr
   EFunc(params: list<string>, body: expr)
   EArray(elems: list<expr>)
 
+// lvalue path selectors (array element assignment): literal or dynamic index
+pub type lsel
+  LIdx(i: int)
+  LDyn(e: expr)
+
 // Statements
 pub type stmt
   SExpr(e: expr)
   SAssign(id: string, e: expr)
+  SAssignPath(id: string, path: list<lsel>, e: expr)  // arr.i := e (functional update)
   SDecl(id: string)
   SPrint(e: expr)
   SLoop(body: stmt)
@@ -59,6 +65,7 @@ pub type semval
   SVStmtArm(pat: pattern, body: stmt)
   SVBinopTail(op: string, rhs: expr)
   SVIndex(idx: int)
+  SVLSel(sel: lsel)         // lvalue selector for path assignment
   SVArr(elems: list<expr>)  // array tail of a paren_expr (the elements after the first)
 
 fun env-get(e: e4env, key: string): rval
@@ -223,10 +230,40 @@ fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e4env): <div,typ
         Just(binds) -> eval(body, env-extend(e, binds))
         Nothing -> eval-case-arms(scrut, rest, e)
 
+// Functional update along an lvalue path: rebuild the array(s) with the
+// element at the (possibly nested) index replaced. Pure value semantics — no
+// aliasing. Out-of-bounds assignment is erroneous (kind oob), leaving the
+// container unchanged as the fallback; a non-array container is a type error.
+fun set-at(arr: vector<rval>, idx: int, v: rval): vector<rval>
+  arr.list.map-indexed(fn(i, x) if i == idx then v else x).vector
+
+fun update-path(v: rval, sels: list<lsel>, newv: rval, e: e4env): <div,type-error,violation> rval
+  match sels
+    Nil -> newv
+    Cons(sel, rest) ->
+      val idx = match sel
+        LIdx(i) -> i
+        LDyn(ix) -> match eval(ix, e)
+          VInt(n) -> n
+          other -> do-type-error("array index is " ++ kind(other))
+      match v
+        VArray(arr) -> match arr.at(idx)
+          Just(cur) -> VArray(set-at(arr, idx, update-path(cur, rest, newv, e)))
+          Nothing -> violate("oob", "assignment index " ++ idx.show ++ " out of bounds (length " ++ arr.length.show ++ ")", v)
+        other -> do-type-error("indexing " ++ kind(other) ++ " in assignment")
+
 fun exec(s: stmt, e: e4env): <div,console,loop-break,type-error,violation> e4env
   match s
     SExpr(_) -> e
     SAssign(id, ex) -> env-set(e, id, eval(ex, e))
+    SAssignPath(id, path, ex) ->
+      match e.filter(fn(p) p.fst == id)
+        Nil ->
+          val _ = violate("unbound", "assigning to index of undeclared '" ++ id ++ "'", VInt(0))
+          e  // unbound base: no-op (in fallback/observe mode)
+        Cons((_, cur), _) ->
+          val newv = eval(ex, e)  // RHS evaluated before the path indices
+          env-set(e, id, update-path(cur, path, newv, e))
     SDecl(id) -> env-set(e, id, VInt(0))
     SPrint(ex) ->
       println(show-rval(eval(ex, e)))
@@ -277,6 +314,9 @@ fun sv-to-expr(v: semval): maybe<expr>
 
 fun sv-to-pat(v: semval): maybe<pattern>
   match v { SVPat(p) -> Just(p); _ -> Nothing }
+
+fun sv-to-lsel(v: semval): maybe<lsel>
+  match v { SVLSel(s) -> Just(s); _ -> Nothing }
 
 fun fold-binop-tails(base: expr, tails: list<semval>): expr
   tails.foldl(base) fn(acc, tail)
@@ -343,6 +383,17 @@ fun e4-action(name: string, txt: string, children: list<semval>, caps: captures<
     "Var" -> SVExpr(EVar(cs.head.default(SVIdent("")).ident-str))
     "Assign" -> match cs
       Cons(SVIdent(id), Cons(SVExpr(e), _)) -> SVStmt(SAssign(id, e))
+      _ -> SVList(cs)
+    "LIdx" -> match cs
+      Cons(SVExpr(EVal(VInt(i))), _) -> SVLSel(LIdx(i))
+      _ -> SVList(cs)
+    "LDyn" -> match cs
+      Cons(SVExpr(ix), _) -> SVLSel(LDyn(ix))
+      _ -> SVList(cs)
+    "AssignPath" -> match cs  // [SVIdent base, SVLSel.., SVExpr rhs]
+      Cons(SVIdent(base), rest) -> match rest.reverse
+        Cons(SVExpr(rhs), sels-rev) -> SVStmt(SAssignPath(base, sels-rev.reverse.filter-map(sv-to-lsel), rhs))
+        _ -> SVList(cs)
       _ -> SVList(cs)
     "Not" -> match cs { Cons(SVExpr(e), _) -> SVExpr(ENot(e)); _ -> SVExpr(EVal(VBool(False))) }
     "Neg" -> match cs { Cons(SVExpr(e), _) -> SVExpr(ENeg(e)); _ -> SVExpr(EVal(VInt(0))) }

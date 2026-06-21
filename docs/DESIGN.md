@@ -134,3 +134,38 @@ structures meet. This keeps the type discipline clean: `+ - * / %` require
 integer operands and yield integers; `&& || !` require boolean operands and
 yield booleans; `== < >` (and friends) are the bridge that turns integers into
 booleans. e6's static checker enforces exactly this separation.
+
+## lvalue Assignment: Functional Update
+
+Compound values (arrays at e4+, records at e5+) support in-place-looking
+assignment to a component: `arr.0 := e`, `arr (i) := e`, `rec.field := e`, and
+chained paths like `arr.0 (i) := e` / `rec.f0.f1 := e`.
+
+**Semantics: functional update, not mutation.** `arr.i := e` is *sugar* for
+rebinding the base variable to an updated copy — conceptually
+`arr := <arr with index i replaced by e>`. There is no aliasing and no heap:
+```
+a := (1; 2; 3;)
+b := a
+a.0 := 9      // a == (9; 2; 3;),  b == (1; 2; 3;)   (b is untouched)
+```
+This was a deliberate choice (2026-06-21). The whole language is value-oriented
+— the environment maps names to immutable values and there are no
+references/pointers anywhere — so reference semantics (where `a.0 := 9` would
+also change `b`) would require introducing a mutable heap and aliasing model
+that exists nowhere else. Functional update keeps the language small and
+referentially transparent, and stays a local change to each interpreter's
+assignment handler.
+
+**Consequences:**
+- The lvalue root must be a *variable*. `f().x := e` or `(a; b;).0 := e` are not
+  expressible — there is no storage location, only a named binding to rebind.
+- Evaluation order: the right-hand side is evaluated first, then the path's
+  (dynamic) indices left to right. (Matters only for which *erroneous construct*
+  — `div0`, `oob` — is reported first under `--enforce`.)
+- Out-of-bounds element assignment is erroneous (kind `oob`, like out-of-bounds
+  reads); the fallback leaves the container unchanged. Assigning through a
+  non-array/non-record component is a type error and halts.
+- At e6 the static checker requires the assigned value's type to match the
+  component's type; the base variable's type is unchanged (an update can't
+  change a structure's shape).

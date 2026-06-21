@@ -62,6 +62,37 @@ check "juxt_index" "$E4 $TMP" "20"
 echo -e 'arr := (10; 20; 30;)\nprint arr.99' > "$TMP"
 check "oob_index" "$E4 $TMP" "0"
 
+# Array element assignment (functional update)
+echo -e 'a := (10; 20; 30;)\na.0 := 99\nprint a' > "$TMP"
+check "arr_set_literal" "$E4 $TMP" "(99; 20; 30;)"
+
+echo -e 'a := (10; 20; 30;)\ni := 2\na (i) := 7\nprint a' > "$TMP"
+check "arr_set_dynamic" "$E4 $TMP" "(10; 20; 7;)"
+
+# Value semantics: updating a does not affect an earlier copy b
+echo -e 'a := (1; 2;)\nb := a\na.0 := 9\nprint b' > "$TMP"
+check "arr_set_value_semantics" "$E4 $TMP" "(1; 2;)"
+
+# Nested update via a chained path
+echo -e 'a := ((1; 2;); (3; 4;);)\na.0 (1) := 8\nprint a' > "$TMP"
+check "arr_set_nested" "$E4 $TMP" "((1; 8;); (3; 4;);)"
+
+# Out-of-bounds assignment is erroneous (kind oob): fallback leaves it unchanged
+echo -e 'a := (1; 2;)\na.5 := 9\nprint a\nprint 7' > "$TMP"
+check "arr_set_oob_fallback" "$E4 $TMP" "(1; 2;) 7"
+check "arr_set_oob_enforce" "$E4 --enforce $TMP" ""
+
+# Assigning into a non-array index is a type error (halts)
+echo -e 'x := 5\nx.0 := 9\nprint x' > "$TMP"
+out=$(timeout $TIMEOUT "$E4" "$TMP" 2>&1)
+if echo "$out" | grep -qF "Type error: indexing int in assignment"; then
+    echo "PASS arr_set_type_error"
+    pass=$((pass+1))
+else
+    echo "FAIL arr_set_type_error"
+    fail=$((fail+1))
+fi
+
 # Pattern matching - wildcard
 echo -e 'x := 5\nprint case x { _ -> 42 }' > "$TMP"
 check "pat_wildcard" "$E4 $TMP" "42"

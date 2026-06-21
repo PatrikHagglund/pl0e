@@ -137,4 +137,21 @@ pub fun main(): <console, div, exn> ()
   val w25 = warn-grammar(g25)
   test("no right-recursion", !w25.any(fn(w) w.contains("right-recursive")))
 
+  // === Exec-path packrat memoization ===
+  // A grammar whose two alternatives share the FIRST prefix `p`: matching the
+  // first alternative parses `p` (which recurses through nested parens), then
+  // the trailing "+" fails, forcing a backtrack that re-parses `p`. Without
+  // memoization this re-parse is exponential in the nesting depth; with the
+  // packrat memo each (rule, position) is computed once. peg-exec-stats only
+  // counts a PRule on a memo *miss*, so the total call count is the direct
+  // signal: linear-ish (memoized) vs. thousands (un-memoized).
+  val gmemo = parse-peg("e = p \"+\" e / p\np = \"(\" e \")\" / \"z\"")
+  val deep = "((((((((((((((z))))))))))))))"  // 14 nested parens, no "+"
+  val (mres, mstats) = peg-exec-stats(gmemo, [], fn(_n, _t, _c, _caps) 0, "e", deep)
+  val mcalls = mstats.foldl(0, fn(acc, p) acc + p.snd.calls)
+  test("memoized parse succeeds", mres.is-just)
+  // 2 rules over ~29 positions bounds the distinct (rule,pos) work well under
+  // 200; the un-memoized path would record many thousands of calls here.
+  test("memoization keeps rule calls linear", mcalls < 200)
+
   println("\n=== Done ===")

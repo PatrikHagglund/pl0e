@@ -567,6 +567,17 @@ pub alias memo-table = list<(memo-key, memo-result)>
 pub alias exec-memo-result<s> = maybe<(pstate, s)>
 pub alias exec-memo-table<s> = list<(memo-key, exec-memo-result<s>)>
 
+// Packrat memo for the action-executing path, as a *mutable* effect rather
+// than a threaded value. The table lives in the with-memo handler, which is
+// installed outside (above) all the peg-fail handlers, so both positive and
+// negative entries written before a fail() survive the backtrack unwind —
+// the property the old threaded memo could not provide. memo-get returns
+// Nothing on a miss, Just(entry) on a hit (entry is itself maybe: a cached
+// success or a cached failure).
+pub effect peg-memo<s>
+  fun memo-get(key: memo-key): maybe<exec-memo-result<s>>
+  fun memo-put(key: memo-key, v: exec-memo-result<s>): ()
+
 fun memo-lookup(tbl: memo-table, key: memo-key): maybe<memo-result>
   match tbl.filter(fn(e) e.fst == key)
     Cons((_, v), _) -> Just(v)
@@ -886,7 +897,9 @@ fun to-values(cs: list<captured<s>>): list<s>
 
 // Execute PEG with semantic actions
 // Returns (remaining_input, semantic_value) or fails
-fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fail,peg-fuel,div> (pstate, captured<s>)
+// `orig` is the slice the current parse started from; (rule, pos-in-orig)
+// keys the packrat memo. Memoization happens at rule boundaries (PRule).
+fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate, orig: pstate): <peg-fail,peg-fuel,peg-memo<s>,div> (pstate, captured<s>)
   if !burn() then fail()
   match p
     PLit(lit) ->
@@ -908,7 +921,7 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       var cur := s
       var vals := []
       ps.foreach fn(p1)
-        val (s1, v1) = peg-exec-match(g, acts, def, p1, cur)
+        val (s1, v1) = peg-exec-match(g, acts, def, p1, cur, orig)
         cur := s1
         vals := Cons(v1, vals)
       val children = vals.reverse
@@ -921,14 +934,14 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
           (cur, Captured(Nothing, def("_seq", s.string.first(s.count - cur.count).string, vs, caps)))
 
     PChoice(ps) ->
-      peg-exec-choice(g, acts, def, ps, s)
+      peg-exec-choice(g, acts, def, ps, s, orig)
 
     PStar(p1) ->
       var cur := s
       var vals := []
       var done := False
       while { !done } fn()
-        match peg-exec-try(g, acts, def, p1, cur)
+        match peg-exec-try(g, acts, def, p1, cur, orig)
           Just((s1, v1)) ->
             if s1.count == cur.count then done := True
             else { cur := s1; vals := Cons(v1, vals) }
@@ -937,12 +950,12 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       (cur, Captured(Nothing, def("_star", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children))))
 
     PPlus(p1) ->
-      val (s1, v1) = peg-exec-match(g, acts, def, p1, s)
+      val (s1, v1) = peg-exec-match(g, acts, def, p1, s, orig)
       var cur := s1
       var vals := [v1]
       var done := False
       while { !done } fn()
-        match peg-exec-try(g, acts, def, p1, cur)
+        match peg-exec-try(g, acts, def, p1, cur, orig)
           Just((s2, v2)) ->
             if s2.count == cur.count then done := True
             else { cur := s2; vals := Cons(v2, vals) }
@@ -951,44 +964,52 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       (cur, Captured(Nothing, def("_plus", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children))))
 
     POpt(p1) ->
-      match peg-exec-try(g, acts, def, p1, s)
+      match peg-exec-try(g, acts, def, p1, s, orig)
         Just((s1, v1)) -> (s1, Captured(Nothing, def("_opt", s.string.first(s.count - s1.count).string, [v1.cval], [])))
         Nothing -> (s, Captured(Nothing, def("_opt", "", [], [])))
 
     PNot(p1) ->
-      match peg-exec-try(g, acts, def, p1, s)
+      match peg-exec-try(g, acts, def, p1, s, orig)
         Just(_) -> fail()
         Nothing -> (s, Captured(Nothing, def("_not", "", [], [])))
 
     PAnd(p1) ->
-      val _ = peg-exec-match(g, acts, def, p1, s)
+      val _ = peg-exec-match(g, acts, def, p1, s, orig)
       (s, Captured(Nothing, def("_and", "", [], [])))
 
     PRule(name) ->
-      val (body, tag) = grammar-lookup(g, name)
-      val fuel-start = enter-rule(name)
-      val result = peg-exec-try(g, acts, def, body, s)
-      match result
+      val key = (name, sslice-pos(s, orig))
+      match memo-get(key)
+        Just(Just((s1, v))) -> (s1, Captured(Nothing, v))  // cached success
+        Just(Nothing) -> fail()                            // cached failure
         Nothing ->
-          exit-rule(name, False, fuel-start)
-          fail()
-        Just((s1, v1)) ->
-          exit-rule(name, True, fuel-start)
-          val txt = s.string.first(s.count - s1.count).string
-          val action-name = tag.default(name)
-          val act = action-lookup(acts, action-name, def)
-          val caps = match v1 { Captured(_, _) -> [] }
-          (s1, Captured(Nothing, act(action-name, txt, [v1.cval], caps)))
+          val (body, tag) = grammar-lookup(g, name)
+          val fuel-start = enter-rule(name)
+          val result = peg-exec-try(g, acts, def, body, s, orig)
+          match result
+            Nothing ->
+              exit-rule(name, False, fuel-start)
+              memo-put(key, Nothing)
+              fail()
+            Just((s1, v1)) ->
+              exit-rule(name, True, fuel-start)
+              val txt = s.string.first(s.count - s1.count).string
+              val action-name = tag.default(name)
+              val act = action-lookup(acts, action-name, def)
+              val caps = match v1 { Captured(_, _) -> [] }
+              val rv = act(action-name, txt, [v1.cval], caps)
+              memo-put(key, Just((s1, rv)))
+              (s1, Captured(Nothing, rv))
 
     PCapture(cname, p1) ->
-      val (s1, v1) = peg-exec-match(g, acts, def, p1, s)
+      val (s1, v1) = peg-exec-match(g, acts, def, p1, s, orig)
       // Mark this value with the capture name
       (s1, Captured(Just(cname), v1.cval))
 
     PAction(p1, iact) ->
       // For inline actions, we need to collect captures from the pattern
       // Match the pattern and collect all captured values
-      val (s1, caps, result) = peg-exec-match-with-caps(g, acts, def, p1, s)
+      val (s1, caps, result) = peg-exec-match-with-caps(g, acts, def, p1, s, orig)
       val n = s.count - s1.count
       val txt = s.string.first(n).string
       // Evaluate inline action with captures and text
@@ -999,14 +1020,14 @@ fun peg-exec-match(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: psta
       (s1, Captured(Nothing, evaled))
 
 // Match and collect captures (for inline actions)
-fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fail,peg-fuel,div> (pstate, captures<s>, s)
+fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate, orig: pstate): <peg-fail,peg-fuel,peg-memo<s>,div> (pstate, captures<s>, s)
   if !burn() then fail()
   match p
     PSeq(ps) ->
       var cur := s
       var vals := []
       ps.foreach fn(p1)
-        val (s1, v1) = peg-exec-match(g, acts, def, p1, cur)
+        val (s1, v1) = peg-exec-match(g, acts, def, p1, cur, orig)
         cur := s1
         vals := Cons(v1, vals)
       val children = vals.reverse
@@ -1022,7 +1043,7 @@ fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: pe
       var vals := [Captured(Nothing, def("_nil", "", [], []))]
       var done := False
       while { !done } fn()
-        match peg-exec-try(g, acts, def, p1, cur)
+        match peg-exec-try(g, acts, def, p1, cur, orig)
           Just((s1, v1)) ->
             if s1.count == cur.count then done := True // no progress, stop
             else { cur := s1; vals := Cons(v1, vals) }
@@ -1031,7 +1052,7 @@ fun peg-exec-match-with-caps(g: grammar, acts: actions<s>, def: action<s>, p: pe
       val vs = to-values(children)
       (cur, [], def("_list", "", vs, []))
     _ ->
-      val (s1, v1) = peg-exec-match(g, acts, def, p, s)
+      val (s1, v1) = peg-exec-match(g, acts, def, p, s, orig)
       val caps = match v1.cname { Just(n) -> [(n, v1.cval)]; Nothing -> [] }
       (s1, caps, v1.cval)
 
@@ -1057,17 +1078,17 @@ fun eval-iexpr(e: iexpr, txt: string, caps: captures<s>, def: action<s>): <div> 
       val v = eval-iexpr(expr, txt, caps, def)
       def("_field", f, [v], [])
 
-fun peg-exec-try(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate): <peg-fuel,div> maybe<(pstate, captured<s>)>
+fun peg-exec-try(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate, orig: pstate): <peg-fuel,peg-memo<s>,div> maybe<(pstate, captured<s>)>
   with ctl fail() Nothing
-  Just(peg-exec-match(g, acts, def, p, s))
+  Just(peg-exec-match(g, acts, def, p, s, orig))
 
-fun peg-exec-choice(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>, s: pstate): <peg-fail,peg-fuel,div> (pstate, captured<s>)
+fun peg-exec-choice(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>, s: pstate, orig: pstate): <peg-fail,peg-fuel,peg-memo<s>,div> (pstate, captured<s>)
   match ps
     Nil -> fail()
     Cons(p, rest) ->
-      match peg-exec-try(g, acts, def, p, s)
+      match peg-exec-try(g, acts, def, p, s, orig)
         Just(r) -> r
-        Nothing -> peg-exec-choice(g, acts, def, rest, s)
+        Nothing -> peg-exec-choice(g, acts, def, rest, s, orig)
 
 fun with-fuel(max-fuel: int, action: () -> <peg-fuel|e> a): e a
   var fuel := max-fuel
@@ -1091,35 +1112,49 @@ fun with-fuel-stats(max-fuel: int, action: () -> <peg-fuel|e> a): e (a, parse-st
       stats := stats-update(stats, name, fuel-start - fuel, !success)
   (action(), stats)
 
+// Packrat memo handler: a mutable (rule,pos) -> result table scoped to a
+// single parse. Installed above the per-attempt fail handlers, so entries
+// written before a backtrack survive it. A fresh table per parse keeps
+// positions (keyed against `orig`) consistent.
+fun with-memo(action: () -> <peg-memo<s>|e> a): e a
+  var tbl := exec-memo-new()
+  with handler
+    fun memo-get(key) exec-memo-lookup(tbl, key)
+    fun memo-put(key, v) tbl := exec-memo-store(tbl, key, v)
+  action()
+
 // Public API for semantic action execution
 pub fun peg-exec(g: grammar, acts: actions<s>, def: action<s>, start: string, input: string, max-fuel: int = default-fuel): <div> maybe<s>
+  val inp = input.slice
   with-fuel(max-fuel) fn()
-    match peg-exec-try(g, acts, def, PRule(start), input.slice)
-      Just((_, v)) -> Just(v.cval)
-      Nothing -> Nothing
+    with-memo fn()
+      match peg-exec-try(g, acts, def, PRule(start), inp, inp)
+        Just((_, v)) -> Just(v.cval)
+        Nothing -> Nothing
 
 pub fun peg-exec-stats(g: grammar, acts: actions<s>, def: action<s>, start: string, input: string, max-fuel: int = default-fuel): <div> (maybe<s>, parse-stats)
+  val inp = input.slice
   with-fuel-stats(max-fuel) fn()
-    match peg-exec-try(g, acts, def, PRule(start), input.slice)
-      Just((_, v)) -> Just(v.cval)
-      Nothing -> Nothing
+    with-memo fn()
+      match peg-exec-try(g, acts, def, PRule(start), inp, inp)
+        Just((_, v)) -> Just(v.cval)
+        Nothing -> Nothing
 
-// Parse with optional memoization. Pass Just([]) to enable memoization.
-// Returns (updated_memo, result) when memo is Just, (Nothing, result) when memo is Nothing.
-pub fun peg-exec-partial(g: grammar, acts: actions<s>, def: action<s>, start: string, input: sslice, max-fuel: int = default-fuel, memo: maybe<exec-memo-table<s>> = Nothing, orig: sslice = input): <div> (maybe<exec-memo-table<s>>, maybe<(sslice, s)>)
+// Partial parse with packrat memoization (always on). The leading
+// maybe<exec-memo-table> in the result is retained for call-site
+// compatibility and is always Nothing — the memo lives in the with-memo
+// handler now, not threaded out.
+pub fun peg-exec-partial(g: grammar, acts: actions<s>, def: action<s>, start: string, input: sslice, max-fuel: int = default-fuel, orig: sslice = input): <div> (maybe<exec-memo-table<s>>, maybe<(sslice, s)>)
   with-fuel(max-fuel) fn()
-    match memo
-      Just(m) ->
-        val (m2, res) = peg-exec-try-memo(g, acts, def, PRule(start), input, m, orig)
-        match res
-          Just((rest, v)) -> (Just(m2), Just((rest, v.cval)))
-          Nothing -> (Just(m2), Nothing)
-      Nothing ->
-        match peg-exec-try(g, acts, def, PRule(start), input)
-          Just((rest, v)) -> (Nothing, Just((rest, v.cval)))
-          Nothing -> (Nothing, Nothing)
+    with-memo fn()
+      match peg-exec-try(g, acts, def, PRule(start), input, orig)
+        Just((rest, v)) -> (Nothing, Just((rest, v.cval)))
+        Nothing -> (Nothing, Nothing)
 
-// === Memoized Semantic Action Execution ===
+// === Packrat Memo Table (backing store for the peg-memo handler) ===
+
+fun exec-memo-new(): exec-memo-table<s>
+  []
 
 fun exec-memo-lookup(tbl: exec-memo-table<s>, key: memo-key): maybe<exec-memo-result<s>>
   match tbl.filter(fn(e) e.fst == key)
@@ -1128,173 +1163,6 @@ fun exec-memo-lookup(tbl: exec-memo-table<s>, key: memo-key): maybe<exec-memo-re
 
 fun exec-memo-store(tbl: exec-memo-table<s>, key: memo-key, v: exec-memo-result<s>): exec-memo-table<s>
   Cons((key, v), tbl)
-
-fun peg-exec-try-memo(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate, memo: exec-memo-table<s>, orig: pstate): <peg-fuel,div> (exec-memo-table<s>, maybe<(pstate, captured<s>)>)
-  with ctl fail() (memo, Nothing)
-  val (m, r) = peg-exec-match-memo(g, acts, def, p, s, memo, orig)
-  (m, Just(r))
-
-fun peg-exec-match-memo(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate, memo: exec-memo-table<s>, orig: pstate): <peg-fail,peg-fuel,div> (exec-memo-table<s>, (pstate, captured<s>))
-  if !burn() then fail()
-  match p
-    PLit(lit) ->
-      if s.string.sslice/starts-with(lit).bool then
-        (memo, (s.advance(lit.count), Captured(Nothing, def("_lit", lit, [], []))))
-      else fail()
-
-    PAny ->
-      match s.next
-        Just((c, rest)) -> (memo, (rest, Captured(Nothing, def("_any", c.string, [], []))))
-        Nothing -> fail()
-
-    PClass(ranges, neg) ->
-      match s.next
-        Just((c, rest)) | in-class(c, ranges, neg) -> (memo, (rest, Captured(Nothing, def("_class", c.string, [], []))))
-        _ -> fail()
-
-    PSeq(ps) ->
-      var cur := s
-      var vals := []
-      var m := memo
-      ps.foreach fn(p1)
-        val (m1, (s1, v1)) = peg-exec-match-memo(g, acts, def, p1, cur, m, orig)
-        m := m1; cur := s1; vals := Cons(v1, vals)
-      val children = vals.reverse
-      match children
-        Cons(v, Nil) -> (m, (cur, v))
-        _ ->
-          val caps = to-captures(children)
-          val vs = to-values(children)
-          (m, (cur, Captured(Nothing, def("_seq", s.string.first(s.count - cur.count).string, vs, caps))))
-
-    PChoice(ps) -> peg-exec-choice-memo(g, acts, def, ps, s, memo, orig)
-
-    PStar(p1) ->
-      var cur := s
-      var vals := []
-      var m := memo
-      var done := False
-      while { !done } fn()
-        val (m2, res) = peg-exec-try-memo(g, acts, def, p1, cur, m, orig)
-        match res
-          Just((s1, v1)) ->
-            if s1.count == cur.count then done := True
-            else { m := m2; cur := s1; vals := Cons(v1, vals) }
-          Nothing -> done := True
-      val children = vals.reverse
-      (m, (cur, Captured(Nothing, def("_star", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children)))))
-
-    PPlus(p1) ->
-      val (m1, (s1, v1)) = peg-exec-match-memo(g, acts, def, p1, s, memo, orig)
-      var cur := s1
-      var vals := [v1]
-      var m := m1
-      var done := False
-      while { !done } fn()
-        val (m2, res) = peg-exec-try-memo(g, acts, def, p1, cur, m, orig)
-        match res
-          Just((s2, v2)) ->
-            if s2.count == cur.count then done := True
-            else { m := m2; cur := s2; vals := Cons(v2, vals) }
-          Nothing -> done := True
-      val children = vals.reverse
-      (m, (cur, Captured(Nothing, def("_plus", s.string.first(s.count - cur.count).string, to-values(children), to-captures(children)))))
-
-    POpt(p1) ->
-      val (m1, res) = peg-exec-try-memo(g, acts, def, p1, s, memo, orig)
-      match res
-        Just((s1, v1)) -> (m1, (s1, Captured(Nothing, def("_opt", s.string.first(s.count - s1.count).string, [v1.cval], []))))
-        Nothing -> (m1, (s, Captured(Nothing, def("_opt", "", [], []))))
-
-    PNot(p1) ->
-      val (m1, res) = peg-exec-try-memo(g, acts, def, p1, s, memo, orig)
-      match res
-        Just(_) -> fail()
-        Nothing -> (m1, (s, Captured(Nothing, def("_not", "", [], []))))
-
-    PAnd(p1) ->
-      val (m1, _) = peg-exec-match-memo(g, acts, def, p1, s, memo, orig)
-      (m1, (s, Captured(Nothing, def("_and", "", [], []))))
-
-    PRule(name) ->
-      val pos = sslice-pos(s, orig)
-      val key = (name, pos)
-      match exec-memo-lookup(memo, key)
-        Just(Just((s1, v))) -> (memo, (s1, Captured(Nothing, v)))
-        Just(Nothing) -> fail()
-        Nothing ->
-          val (body, tag) = grammar-lookup(g, name)
-          val (m1, res) = peg-exec-try-memo(g, acts, def, body, s, memo, orig)
-          match res
-            Just((s1, v1)) ->
-              val txt = s.string.first(s.count - s1.count).string
-              val action-name = tag.default(name)
-              val act = action-lookup(acts, action-name, def)
-              val result = act(action-name, txt, [v1.cval], [])
-              val m2 = exec-memo-store(m1, key, Just((s1, result)))
-              (m2, (s1, Captured(Nothing, result)))
-            Nothing ->
-              val m2 = exec-memo-store(m1, key, Nothing)
-              with ctl fail() (m2, fail())
-              fail()
-
-    PCapture(cname, p1) ->
-      val (m1, (s1, v1)) = peg-exec-match-memo(g, acts, def, p1, s, memo, orig)
-      (m1, (s1, Captured(Just(cname), v1.cval)))
-
-    PAction(p1, iact) ->
-      val (m1, (s1, caps, result)) = peg-exec-match-with-caps-memo(g, acts, def, p1, s, memo, orig)
-      val txt = s.string.first(s.count - s1.count).string
-      val evaled = match iact
-        ICons(tag, Nil) -> def("_cons", tag, [result], [])
-        _ -> eval-iexpr(iact, txt, caps, def)
-      (m1, (s1, Captured(Nothing, evaled)))
-
-fun peg-exec-match-with-caps-memo(g: grammar, acts: actions<s>, def: action<s>, p: peg, s: pstate, memo: exec-memo-table<s>, orig: pstate): <peg-fail,peg-fuel,div> (exec-memo-table<s>, (pstate, captures<s>, s))
-  if !burn() then fail()
-  match p
-    PSeq(ps) ->
-      var cur := s
-      var vals := []
-      var m := memo
-      ps.foreach fn(p1)
-        val (m1, (s1, v1)) = peg-exec-match-memo(g, acts, def, p1, cur, m, orig)
-        m := m1; cur := s1; vals := Cons(v1, vals)
-      val children = vals.reverse
-      match children
-        Cons(v, Nil) -> (m, (cur, to-captures(children), v.cval))
-        _ ->
-          val caps = to-captures(children)
-          val vs = to-values(children)
-          (m, (cur, caps, def("_seq", s.string.first(s.count - cur.count).string, vs, caps)))
-    PStar(p1) ->
-      var cur := s
-      var vals := [Captured(Nothing, def("_nil", "", [], []))]
-      var m := memo
-      var done := False
-      while { !done } fn()
-        val (m2, res) = peg-exec-try-memo(g, acts, def, p1, cur, m, orig)
-        match res
-          Just((s1, v1)) ->
-            if s1.count == cur.count then done := True
-            else { m := m2; cur := s1; vals := Cons(v1, vals) }
-          Nothing -> done := True
-      val children = vals.reverse.drop(1)
-      val vs = to-values(children)
-      (m, (cur, [], def("_list", "", vs, [])))
-    _ ->
-      val (m1, (s1, v1)) = peg-exec-match-memo(g, acts, def, p, s, memo, orig)
-      val caps = match v1.cname { Just(n) -> [(n, v1.cval)]; Nothing -> [] }
-      (m1, (s1, caps, v1.cval))
-
-fun peg-exec-choice-memo(g: grammar, acts: actions<s>, def: action<s>, ps: list<peg>, s: pstate, memo: exec-memo-table<s>, orig: pstate): <peg-fail,peg-fuel,div> (exec-memo-table<s>, (pstate, captured<s>))
-  match ps
-    Nil -> fail()
-    Cons(p, rest) ->
-      val (m1, res) = peg-exec-try-memo(g, acts, def, p, s, memo, orig)
-      match res
-        Just(r) -> (m1, r)
-        Nothing -> peg-exec-choice-memo(g, acts, def, rest, s, m1, orig)
 
 // Dummy main for standalone compilation
 pub fun main(): console ()

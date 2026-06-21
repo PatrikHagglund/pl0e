@@ -146,7 +146,9 @@ alias action<s>    // (name, text, children, captures) -> s
 parse-peg(input: string): grammar
 peg-parse(g, start, input): maybe<ptree>
 peg-exec(g, acts, def, start, input): maybe<s>
-peg-exec-partial(g, acts, def, start, input, memo?, orig?): (maybe<memo>, maybe<(sslice, s)>)
+peg-exec-partial(g, acts, def, start, input, max-fuel?, orig?): (maybe<memo>, maybe<(sslice, s)>)
+  // always packrat-memoized; the leading maybe<memo> is now always Nothing
+  // (kept for call-site compatibility — the memo lives in a handler)
 capture-get(caps, name): maybe<s>
 ```
 
@@ -218,29 +220,46 @@ Backtracking issues often only appear with deeply nested input. Test with patter
 
 - Backtracking via Koka's `peg-fail` effect
 - No left-recursion support (detected at load time with error)
-- Memoization available via `*-memo` functions for both parse-tree and semantic-action modes
+- The semantic-action path (`peg-exec*`) is packrat-memoized at rule boundaries (always on); the parse-tree path (`peg-parse`) keeps its older opt-in `*-memo` variants
 - Inline actions evaluated during `peg-exec*` calls
 - Named captures collected from sequences for inline actions
 - Single-element sequences pass through without wrapping (optimization)
 
 ### Memoization
 
-Packrat-style memoization caches results at rule boundaries (`PRule`) to avoid exponential backtracking. Memoization is opt-in via the `memo` parameter:
+The action-executing path (`peg-exec`, `peg-exec-partial`, `peg-exec-stats`)
+is packrat-memoized at rule boundaries (`PRule`), keyed by `(rule, position)`,
+so each rule is parsed at most once per position — turning the exponential
+re-parse of overlapping-FIRST alternatives into linear work.
+
+The memo table is a **mutable handler** (`peg-memo` effect / `with-memo`),
+not a value threaded through the call signatures. This matters for
+correctness: failed parses signal via the `peg-fail` effect, which unwinds
+the stack on backtrack. Because the table lives in a handler installed
+*above* the per-attempt `peg-fail` handlers, both positive **and negative**
+(cached-failure) entries written before a backtrack survive it — so a rule
+that fails at a position is not retried there. A fresh table is installed per
+parse (`peg-exec-partial` is called per statement), keeping positions, which
+are relative to `orig`, consistent.
+
+This is transparent to callers — memoization is always on and requires no
+table threading:
 
 ```koka
-// Without memoization (default)
 match peg-exec-partial(g, [], action, "rule", input)
-  (_, Just((rest, value))) -> ...
+  (_, Just((rest, value))) -> ...   // first element is always Nothing now
   _ -> ...
-
-// With memoization - pass Just([]) initially, thread memo through calls
-var memo := Just([])
-match peg-exec-partial(g, [], action, "rule", input, memo=memo, orig=input)
-  (m, Just((rest, value))) -> { memo := m; ... }
-  (m, _) -> { memo := m; ... }
 ```
 
-**Limitation:** Memoization only caches at rule boundaries. Exponential backtracking inside lookahead patterns (`&e` / `!e`) or complex inline sequences is not memoized. For example, a grammar with `&("(" ... ")" "->") func_lit` may still exhibit exponential behavior on deeply nested input.
+Semantic actions for these grammars are pure (they build closures; effects run
+later at exec time), so caching and reusing a rule's action result is sound.
+
+**Limitation:** Memoization is keyed at rule boundaries. Backtracking *inside*
+a single rule's inline sequence or lookahead (`&e` / `!e`) — where no inner
+`PRule` boundary exists — is not separately cached, though any rule references
+within are. Prefer extracting a named rule (which then gets memoized) over a
+large inline lookahead; e.g. `&("(" ... ")" "->") func_lit` over deeply nested
+input is better expressed with the lookahead body as its own rule.
 ```
 
 ### Grammar Validation
@@ -354,7 +373,7 @@ The semantic-action interpreter (`peg-exec*`) is ~14% slower than a two-phase pa
 
 For compute-bound programs, this overhead is negligible since parsing happens once at startup.
 
-**Memoization overhead:** The `*-memo` functions add overhead for cache management (O(n) list lookup per rule). For simple grammars without backtracking, memoization can be 1.5-3x slower than non-memoized parsing. Use memoization only when the grammar has significant backtracking or overlapping alternatives.
+**Memoization overhead:** The exec-path memo is an association list, so each rule boundary costs an O(n) lookup in the (per-parse) table. Because the table is reset per statement parse, n stays small (rules × positions within one statement), and the savings on any real backtracking dominate. For a grammar with overlapping alternatives the win is asymptotic (linear vs. exponential); for a trivial backtrack-free grammar the list overhead is a small constant. If a grammar ever parses large single units, switching the table to a hash map would remove the O(n) factor.
 
 ## Future Considerations
 

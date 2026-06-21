@@ -69,12 +69,20 @@
   (14 stmts -> 1). Remaining Phase 4: PEG `--stats` fuel-regression mode
   (motivating case already fixed); finer nested reduction; reduce against
   the enforce oracle.
-- PEG engine: the action-executing path (peg-exec-*) is NOT memoized
-  (only the action-less matcher is), so overlapping-FIRST rules re-parse
-  on backtrack. Left-factoring paren_expr fixed the one exponential case;
-  a general fix would be packrat memoization of the exec path (parsing is
-  side-effect-free here — actions build closures, side effects run at
-  exec time — so memoizing parse results should be safe). Bigger change.
+- ~~PEG engine: packrat-memoize the action-executing path~~ DONE
+  (2026-06-21): the exec path (peg-exec*) now memoizes at rule boundaries
+  via a *mutable* memo handler (peg-memo effect / with-memo) installed
+  above the peg-fail handlers, so positive AND negative (cached-failure)
+  entries survive backtrack unwinding — the property the old dead/threaded
+  memo could not provide (its fail handler discarded the table). Always on,
+  a fresh table per statement parse; transparent to callers (the leading
+  maybe<memo> in peg-exec-partial's result is now always Nothing). Removed
+  the dead threaded exec-*-memo functions. Validated byte-identical to the
+  oracle over 1000 fuzz seeds across e1-e6 (+mutated/ill-typed), all 19
+  tests pass; added a peg_test stress case (14 nested parens through an
+  overlapping-FIRST grammar) asserting rule calls stay linear (<200 vs.
+  thousands un-memoized). The action-less tree matcher (peg-parse, test-
+  only) keeps its older opt-in *-memo variants, untouched.
 - Koka specializer loop: reported and fixed in ../koka (dev branch, see
   SPECIALIZER-LOOP-REPORT.md there). Fix verified against pl0e:
   `bazel build --config=koka-local //src:efuzz` (new NON-HERMETIC local

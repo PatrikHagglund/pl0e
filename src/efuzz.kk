@@ -4,7 +4,8 @@
 // with their expected output, for differential testing across implementations.
 //
 // Usage: efuzz [seed] [size] [level] [mutate] [keep]
-//   level:  1..6 (default 1); 5 adds records/field-access/record-patterns;
+//   level:  1..6 (default 1); 5 adds records/field-access/record-patterns
+//           (int and bool fields);
 //           6 adds type annotations (typed bindings/decls, typed lambda
 //           params `\p: int -> ...`) and is well-typed by construction, so
 //           e6peg's static checker must accept it (the type-check oracle).
@@ -76,8 +77,8 @@ type fexpr
   FIdxDot(arr: string, i: int)          // level 4: arr.i (literal index, may be oob)
   FIdxDyn(arr: string, idx: fexpr)      // level 4: arr (idx) (dynamic index, may be oob)
   FCasePE(scrut: string, arms: list<(fpat, fexpr)>)  // level 4 pattern-case expression
-  FRecLit(fields: list<(string, fexpr)>)  // level 5: record literal {f0: e, ...}, int fields
-  FField(rec: string, fld: string)         // level 5: rec.field (always present -> int)
+  FRecLit(fields: list<(string, fexpr)>)  // level 5: record literal {f0: e, ...}, int/bool fields
+  FField(rec: string, fld: string)         // level 5: rec.field (always present; int or bool)
 
 // Patterns (level 4-5)
 type fpat
@@ -114,8 +115,9 @@ struct genst
   bvars: list<string>          // bool variables (level 3+)
   fvars: list<(string, int)>   // closure variables: (name, arity) (level 3+)
   avars: list<string>          // array variables (level 4)
-  rvars: list<(string, int)>   // record variables: (name, field count); fields
-                               // are f0..f{n-1}, all int (level 5)
+  rvars: list<(string, list<string>)>  // record variables: (name, field types);
+                               // fields are f0..f{n-1}, each "int" or "bool"
+                               // (level 5; bool fields at level 5+)
   ros: list<string>            // read-only int vars (loop counters: assigning
                                // one could break guaranteed termination)
 
@@ -142,8 +144,8 @@ fun add-fvar(st: genst, name: string, arity: int): genst
 fun add-avar(st: genst, name: string): genst
   Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, Cons(name, st.avars), st.rvars, st.ros)
 
-fun add-rvar(st: genst, name: string, nfields: int): genst
-  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, Cons((name, nfields), st.rvars), st.ros)
+fun add-rvar(st: genst, name: string, ftypes: list<string>): genst
+  Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, Cons((name, ftypes), st.rvars), st.ros)
 
 fun add-ro(st: genst, name: string): genst
   Genst(st.seed, st.nextid, st.ivars, st.bvars, st.fvars, st.avars, st.rvars, Cons(name, st.ros))
@@ -256,21 +258,44 @@ fun gen-index(st: genst, depth: int, lvl: int): div (genst, fexpr)
     Nothing -> gen-lit(st2)
 
 // Record field access (level 5): r.f<i> for a known record var and a field
-// index within its (all-int) fields — always well-typed, always present.
-fun pick-rvar(st: genst): (genst, maybe<(string, int)>)
+// index of the requested type ("int"/"bool") — always well-typed, always
+// present. Field i of record `r` has type (its ftypes list)[i].
+fun pick-rvar(st: genst): (genst, maybe<(string, list<string>)>)
   match st.rvars
     Nil -> (st, Nothing)
     rs ->
       val (st2, i) = pick(st, rs.length)
       (st2, rs.drop(i).head)
 
+// Indices of fields of the given type in a record's ftypes list.
+fun field-indices(ftypes: list<string>, want: string): list<int>
+  ftypes.map-indexed(fn(i, t) (i, t)).filter(fn(p) p.snd == want).map(fst)
+
+// Integer field access, or gen-lit if no record has an int field.
 fun gen-field(st: genst): div (genst, fexpr)
   val (st2, mr) = pick-rvar(st)
   match mr
-    Just((r, nf)) ->
-      val (st3, i) = pick(st2, nf)
-      (st3, FField(r, "f" ++ i.show))
+    Just((r, fts)) -> match field-indices(fts, "int")
+      Nil -> gen-lit(st2)
+      idxs ->
+        val (st3, k) = pick(st2, idxs.length)
+        (st3, FField(r, "f" ++ idxs.drop(k).head.default(0).show))
     Nothing -> gen-lit(st2)
+
+// Boolean field access (level 5+): picks a record with at least one bool
+// field. Returns Nothing if none exists (caller falls back).
+fun gen-bfield(st: genst): div maybe<(genst, fexpr)>
+  val rs-with-bool = st.rvars.filter(fn(rv) !field-indices(rv.snd, "bool").is-nil)
+  match rs-with-bool
+    Nil -> Nothing
+    rs ->
+      val (st2, i) = pick(st, rs.length)
+      match rs.drop(i).head
+        Just((r, fts)) ->
+          val idxs = field-indices(fts, "bool")
+          val (st3, k) = pick(st2, idxs.length)
+          Just((st3, FField(r, "f" ++ idxs.drop(k).head.default(0).show)))
+        Nothing -> Nothing
 
 fun gen-args(st: genst, depth: int, lvl: int, n: int): div (genst, list<fexpr>)
   if n <= 0 then (st, [])
@@ -290,6 +315,10 @@ fun gen-bexpr(st: genst, depth: int, lvl: int): div (genst, fexpr)
     match mv
       Just(v) -> (st3, FVar(v))
       Nothing -> (st3, FBool(True))
+  elif lvl >= 5 && r < 40 && st2.rvars.any(fn(rv) !field-indices(rv.snd, "bool").is-nil) then
+    match gen-bfield(st2)
+      Just((st3, e)) -> (st3, e)
+      Nothing -> (st2, FBool(True))  // unreachable: guard guarantees a bool field
   elif r < 65 then
     val (st3, i) = pick(st2, 6)
     val (st4, l) = gen-iexpr(st3, depth - 1, lvl)
@@ -463,7 +492,7 @@ fun add-pat-vars(st: genst, p: fpat): genst
   match p
     PVarP(name) -> st.add-avar(name)  // top-level: binds the array
     PArrP(elems, _) -> add-elem-vars(st, elems)
-    PRecP(fields) -> add-elem-vars(st, fields.map(snd))  // field binders are int
+    PRecP(fields) -> add-elem-vars(st, fields.map(snd))  // unused: record arms use add-rec-pat-vars (typed)
     _ -> st
 
 fun add-elem-vars(st: genst, elems: list<fpat>): genst
@@ -530,10 +559,10 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
     val (st3, name) = fresh(st2, "r")
     val (st4, nf) = pick(st3, 3)
     val nfields = nf + 1
-    val (st5, fields) = gen-rec-fields(st4, lvl, nfields, 0)
-    val bind = if lvl >= 6 then FTBind(name, rec-type-str(nfields), FRecLit(fields))
+    val (st5, fields, ftypes) = gen-rec-fields(st4, lvl, nfields, 0)
+    val bind = if lvl >= 6 then FTBind(name, rec-type-str(ftypes), FRecLit(fields))
                else FAssign(name, FRecLit(fields))
-    (st5.add-rvar(name, nfields), [bind])
+    (st5.add-rvar(name, ftypes), [bind])
   elif r < 80 && depth < 2 then
     val saved = st2
     val (st3, counter) = fresh(st2, "c")
@@ -568,47 +597,73 @@ fun gen-stmt(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
       (st5.restore-vars(saved), [FIf(mv.default("acc"), body)])
   else gen-assign(st2, lvl)
 
-// Record literal fields: f0..f{nfields-1}, each an int expression (level 5).
-fun gen-rec-fields(st: genst, lvl: int, nfields: int, i: int): div (genst, list<(string, fexpr)>)
-  if i >= nfields then (st, [])
+// Record literal fields: f0..f{nfields-1}, each an int or bool expression
+// (level 5+). Returns the field initializers and their type tags in order.
+fun gen-rec-fields(st: genst, lvl: int, nfields: int, i: int): div (genst, list<(string, fexpr)>, list<string>)
+  if i >= nfields then (st, [], [])
   else
-    val (st2, e) = gen-iexpr(st, 2, lvl)
-    val (st3, rest) = gen-rec-fields(st2, lvl, nfields, i + 1)
-    (st3, Cons(("f" ++ i.show, e), rest))
+    val (st2, bsel) = pick(st, 100)
+    val (st3, e, ty) =
+      if bsel < 35 then  // bool field
+        val (sta, e) = gen-bexpr(st2, 2, lvl)
+        (sta, e, "bool")
+      else
+        val (sta, e) = gen-iexpr(st2, 2, lvl)
+        (sta, e, "int")
+    val (st4, rest, trest) = gen-rec-fields(st3, lvl, nfields, i + 1)
+    (st4, Cons(("f" ++ i.show, e), rest), Cons(ty, trest))
 
-// e6 record type string for a record with `nfields` int fields: "{f0: int, ...}"
-fun rec-type-str(nfields: int): string
-  "{" ++ list(0, nfields - 1).map(fn(i) "f" ++ i.show ++ ": int").join(", ") ++ "}"
+// e6 record type string from a field-type list: "{f0: int, f1: bool, ...}"
+fun rec-type-str(ftypes: list<string>): string
+  "{" ++ ftypes.map-indexed(fn(i, t) "f" ++ i.show ++ ": " ++ t).join(", ") ++ "}"
+
+// Field type tag of "f<i>" in a record's field-type list ("int"/"bool").
+fun ftype-for(fts: list<string>, fld: string): string
+  fts.map-indexed(fn(i, t) ("f" ++ i.show, t)).filter(fn(p) p.fst == fld).map(snd).head.default("int")
+
+// Add a single record-field binder with the field's type: an int field binder
+// becomes an int var, a bool field binder a bool var.
+fun add-one-rec-binder(st: genst, fp: (string, fpat), fts: list<string>): genst
+  match fp.snd
+    PVarP(name) -> if ftype-for(fts, fp.fst) == "bool" then st.add-bvar(name) else st.add-ivar(name)
+    _ -> st
+
+// Add all of a record pattern's binders, typed per matched field.
+fun add-rec-pat-vars(st: genst, p: fpat, fts: list<string>): genst
+  match p
+    PRecP(fields) -> fields.foldl(st, fn(acc, fp) add-one-rec-binder(acc, fp, fts))
+    _ -> st
 
 // Pattern-case on a record variable (level 5), reusing FCaseP with record
-// patterns. Bindings (int field binders) persist after the taken arm.
+// patterns. Field binders (typed per field) persist after the taken arm.
 fun gen-reccasep(st: genst, depth: int, lvl: int): div (genst, list<fstmt>)
   val (st2, mr) = pick-rvar(st)
   match mr
-    Just((r, nf)) ->
+    Just((r, fts)) ->
       val (st3, n) = pick(st2, 2)
-      val (st4, arms) = gen-rec-arms(st3, depth, lvl, nf, n + 2)
+      val (st4, arms) = gen-rec-arms(st3, depth, lvl, fts, n + 2)
       (st4, [FCaseP(r, arms)])
     Nothing -> gen-assign(st2, lvl)
 
-fun gen-rec-arms(st: genst, depth: int, lvl: int, nf: int, n: int): div (genst, list<(fpat, list<fstmt>)>)
+fun gen-rec-arms(st: genst, depth: int, lvl: int, fts: list<string>, n: int): div (genst, list<(fpat, list<fstmt>)>)
   if n <= 0 then (st, [])
   else
     val (st2, p) =
       if n == 1 then (st, PWildP)  // catch-all (records have no empty pattern)
-      else gen-rec-pat(st, nf)
+      else gen-rec-pat(st, fts)
     val saved = st2
-    val st3 = add-pat-vars(st2, p)
+    val st3 = add-rec-pat-vars(st2, p, fts)
     val (st4, nb) = pick(st3, 2)
     val (st5, body) = gen-stmts-n(st4, depth + 1, lvl, nb + 1)
     val st6 = st5.restore-vars(saved)
-    val (st7, rest) = gen-rec-arms(st6, depth, lvl, nf, n - 1)
+    val (st7, rest) = gen-rec-arms(st6, depth, lvl, fts, n - 1)
     (st7, Cons((p, body), rest))
 
-// A record pattern listing a non-empty subset of f0..f{nf-1}, each an int
-// sub-pattern (binder/wildcard/literal).
-fun gen-rec-pat(st: genst, nf: int): div (genst, fpat)
-  val (st2, fields) = gen-rec-pat-fields(st, nf, 0, [])
+// A record pattern listing a non-empty subset of f0..f{n-1}; each field gets a
+// sub-pattern matching its type (int: binder/wildcard/literal; bool:
+// binder/wildcard — there is no bool literal pattern).
+fun gen-rec-pat(st: genst, fts: list<string>): div (genst, fpat)
+  val (st2, fields) = gen-rec-pat-fields(st, fts, 0, [])
   // ensure at least one field (record patterns can't be empty)
   match fields
     Nil ->
@@ -616,14 +671,23 @@ fun gen-rec-pat(st: genst, nf: int): div (genst, fpat)
       (st3, PRecP([("f0", PVarP(name))]))
     _ -> (st2, PRecP(fields))
 
-fun gen-rec-pat-fields(st: genst, nf: int, i: int, acc: list<(string, fpat)>): div (genst, list<(string, fpat)>)
-  if i >= nf then (st, acc)
+fun gen-rec-pat-fields(st: genst, fts: list<string>, i: int, acc: list<(string, fpat)>): div (genst, list<(string, fpat)>)
+  if i >= fts.length then (st, acc)
   else
     val (st2, inc) = pick(st, 100)
-    if inc < 55 then  // include field i with an int sub-pattern
-      val (st3, p) = gen-int-pat(st2)
-      gen-rec-pat-fields(st3, nf, i + 1, acc ++ [("f" ++ i.show, p)])
-    else gen-rec-pat-fields(st2, nf, i + 1, acc)
+    if inc < 55 then  // include field i with a type-appropriate sub-pattern
+      val (st3, p) = if ftype-for(fts, "f" ++ i.show) == "bool" then gen-bool-pat(st2)
+                     else gen-int-pat(st2)
+      gen-rec-pat-fields(st3, fts, i + 1, acc ++ [("f" ++ i.show, p)])
+    else gen-rec-pat-fields(st2, fts, i + 1, acc)
+
+// Sub-pattern for a bool field: binder or wildcard (no bool literal pattern).
+fun gen-bool-pat(st: genst): div (genst, fpat)
+  val (st2, k) = pick(st, 2)
+  if k == 0 then (st2, PWildP)
+  else
+    val (st3, name) = fresh(st2, "m")
+    (st3, PVarP(name))
 
 fun gen-int-pat(st: genst): div (genst, fpat)
   val (st2, k) = pick(st, 3)

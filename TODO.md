@@ -21,7 +21,18 @@
   checker's apply path. Validated across all three e6 oracles (value+type
   / mutated / ill-typed), 0 fails; 55/60 seeds define a closure, 35/60
   apply one.
-  Remaining e6 follow-up: bool/nested record fields (also applies to e5)
+- ~~efuzz e5/e6: bool record fields~~ DONE (2026-06-21): record literals
+  carry int and bool fields (`{f0: int, f1: bool}`); field access is routed
+  to int or bool context by the field's type (`gen-field`/`gen-bfield`);
+  record-pattern field binders are typed per field (int field → int var,
+  bool field → bool var) and bool fields take binder/wildcard sub-patterns
+  only (no bool literal pattern). Field types tracked per record in
+  `rvars`. The mutator stays type-preserving (recurses by node) and the
+  ill-typed mutator's int↔bool flip still rejects. Validated across e5,
+  e5-mutated, e6, e6-mutated, e6-ill-typed (600 seeds), 0 fails.
+  Remaining e6 follow-up: nested (record-valued) record fields — these need
+  chained field access (`r.f0.g0`), which `FField`'s string base does not
+  yet support (would need an expression base + show-fexpr change).
 - e6 design notes to revisit: no recursive types (so the Y combinator does
   not type-check — recursion is loops-only at e6); record types are
   invariant (no width subtyping in expressions, though record *patterns*
@@ -35,7 +46,7 @@
   records (int-field literals, field access, record pattern-cases with
   width subtyping), RRec in the co-evaluator, mutator+reducer support,
   //fuzz:diff_e5 + smokes + reduce_e5 + CI rolling. 300 seeds, 0 fails.
-  Follow-up: bool/nested record fields.
+  Follow-up: nested record fields (bool fields done 2026-06-21, above).
 - ~~efuzz e6: extend the generator to e6 (typed bindings, type decls)~~
   DONE (2026-06-15): typed bindings (FTBind: int/bool/[int]/record),
   typed decls, closures gated out of e6, int-only if/case lowering.

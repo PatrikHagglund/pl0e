@@ -44,6 +44,40 @@ check "record_fields" "$E5 $TMP" "3 4"
 echo 'print {x: 1, y: {z: 2}}' > "$TMP"
 check "record_print_nested" "$E5 $TMP" "{x: 1, y: {z: 2}}"
 
+# Record field assignment (functional update)
+echo -e 'r := {x: 1, y: 2}\nr.x := 9\nprint r' > "$TMP"
+check "record_field_set" "$E5 $TMP" "{x: 9, y: 2}"
+
+# Value semantics: updating r does not affect an earlier copy s
+echo -e 'r := {x: 1, y: 2}\ns := r\nr.x := 9\nprint s' > "$TMP"
+check "record_set_value_semantics" "$E5 $TMP" "{x: 1, y: 2}"
+
+# Nested record field assignment
+echo -e 'r := {a: {b: 1}}\nr.a.b := 8\nprint r' > "$TMP"
+check "record_set_nested" "$E5 $TMP" "{a: {b: 8}}"
+
+# Mixed paths: record inside array, array inside record
+echo -e 'a := ({x: 1}; {x: 2};)\na.1.x := 99\nprint a' > "$TMP"
+check "record_in_array_set" "$E5 $TMP" "({x: 1}; {x: 99};)"
+
+echo -e 'r := {xs: (1; 2; 3;)}\nr.xs (0) := 7\nprint r' > "$TMP"
+check "array_in_record_set" "$E5 $TMP" "{xs: (7; 2; 3;)}"
+
+# Array element assignment carried in from e4
+echo -e 'a := (1; 2; 3;)\na.0 := 9\nprint a' > "$TMP"
+check "array_set_at_e5" "$E5 $TMP" "(9; 2; 3;)"
+
+# Assigning to a missing field is a type error (halts)
+echo -e 'r := {x: 1}\nr.y := 9\nprint r' > "$TMP"
+out=$(timeout $TIMEOUT "$E5" "$TMP" 2>&1)
+if echo "$out" | grep -qF "Type error: no field 'y' in record assignment"; then
+    echo "PASS record_set_missing_field"
+    pass=$((pass+1))
+else
+    echo "FAIL record_set_missing_field"
+    fail=$((fail+1))
+fi
+
 echo -e 'p := {x: 3, y: 4}\nprint case p { {x: a, y: b} -> a + b, _ -> 0 }' > "$TMP"
 check "record_pattern" "$E5 $TMP" "7"
 

@@ -9,8 +9,10 @@
   - [x] e4 array element assignment (`arr.0 := e`, `arr (i) := e`, chained
         `arr.0 (i) := e`); e4.peg `lpath` rule + `SAssignPath`/`update-path`;
         7 e4_test cases; diff_e4 no-regression.
-  - [ ] e5 record field assignment (`rec.field := e`) + array assign carried
-        into e5; nested record/array paths.
+  - [x] e5 record field assignment (`rec.field := e`) + array assign carried
+        into e5; nested + mixed array/record paths (`a.1.x`, `r.xs (0)`);
+        `LField` selector; missing field is a type error. 7 e5_test cases;
+        diff_e5 no-regression.
   - [ ] e6 type-checking of lvalue paths (component type must match RHS).
   - [ ] efuzz: generate lvalue assignment, co-evaluate (functional update in
         the oracle), mutator/reducer support → differential validation.

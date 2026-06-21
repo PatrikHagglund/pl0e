@@ -1,7 +1,6 @@
 // PL/0 Level 3 Grammar - NO FUNC_LIT for debugging
 // RESULT: Without func_lit, `() -> (1)` does not hang (but fails to parse)
 // This confirms the issue is in func_lit interaction with parenthesized expressions
-// See .agents/LEDGER.md for debugging notes
 // Adds: booleans, callables (closures), case expressions, function application
 
 program         = _ statement*

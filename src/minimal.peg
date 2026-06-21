@@ -1,7 +1,6 @@
 // Minimal grammar to reproduce the e3 infinite loop issue
 // RESULT: This grammar does NOT reproduce the bug - it works correctly
 // Used to isolate the issue to e3-specific grammar interactions
-// See .agents/LEDGER.md for debugging notes
 start = _ statement*
 statement = binding / print_stmt
 binding = id:ident _ ":=" _ e:expr { Assign($id, $e) }

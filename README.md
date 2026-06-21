@@ -106,7 +106,7 @@ Example results for `2000 31` (with bigint, INT_BITS=0):
 
 ## Further Reading
 
-- [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions
+- [docs/DESIGN.md](docs/DESIGN.md) — Language progression rationale, control flow design decisions, type-system algebraic structure
 - [docs/E1_SPEC.md](docs/E1_SPEC.md), [docs/E3_SPEC.md](docs/E3_SPEC.md) — Language specifications (e1: minimal; e3: introduces behavior categories)
 - [docs/IMPLEMENTATIONS.md](docs/IMPLEMENTATIONS.md) — Implementation details, integer bit width configuration
 - [docs/PEG_SPEC.md](docs/PEG_SPEC.md) — PEG grammar specification, static analysis (`--warn` flag)

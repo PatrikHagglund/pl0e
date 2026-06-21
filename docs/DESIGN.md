@@ -100,3 +100,37 @@ loop {
 }
 ```
 But it doesn't require mutating the condition variable, unlike `when`.
+
+## Type System: Algebraic Structure
+
+The operator set isn't ad hoc — each type carries a standard algebraic
+structure, and the operators are exactly the structure-preserving operations on
+it. This was the original motivation for the integer/boolean operator choices
+(it predates the level split; it informs e2's arithmetic/comparisons and e3's
+booleans) and is recorded here so the rationale isn't lost.
+
+### Integers (ℤ): a Euclidean domain
+
+- `(ℤ, +, ×)` is a commutative ring with unity. Unary `-` is the additive
+  inverse.
+- `/` and `%` provide *Euclidean division*: `a = b × (a/b) + (a%b)`. (Division
+  by zero is outside the domain; the implementations treat `/0` and `%0` as
+  erroneous with a fallback of 0 — see [E3_SPEC.md](E3_SPEC.md).)
+- Being a Euclidean domain is what makes the classic integer algorithms
+  expressible: GCD via the Euclidean algorithm, Bézout's identity, and unique
+  factorization. The `gcd` examples at each level exercise exactly this.
+
+### Booleans (𝔹): a Boolean algebra
+
+- `(𝔹, ||, &&, !)` is a complemented distributive lattice. Unary `!` is the
+  complement.
+- It satisfies De Morgan's laws — `!(a && b) == !a || !b` — and the usual
+  distributive/absorption identities.
+
+### The type bridge: relational operators
+
+Relational operators are predicates `ℤ × ℤ → 𝔹` — the only place the two
+structures meet. This keeps the type discipline clean: `+ - * / %` require
+integer operands and yield integers; `&& || !` require boolean operands and
+yield booleans; `== < >` (and friends) are the bridge that turns integers into
+booleans. e6's static checker enforces exactly this separation.

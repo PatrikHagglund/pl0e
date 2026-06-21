@@ -23,3 +23,6 @@ bazel-*
 
 # Stray empty file repeatedly created by something in the dev environment
 oom
+
+# Claude Code recreates an empty CLAUDE.md; this repo uses AGENTS.md instead
+CLAUDE.md

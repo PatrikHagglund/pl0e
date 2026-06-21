@@ -1,4 +1,4 @@
-load("//:e1.bzl", "e1_cpp_binary", "e1_llvm_binary")
+load("//src:e1.bzl", "e1_cpp_binary", "e1_llvm_binary")
 
 # C++ backend targets
 e1_cpp_binary(name = "factorial_cpp", src = "factorial.e1")

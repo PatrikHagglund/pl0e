@@ -13,7 +13,11 @@
         into e5; nested + mixed array/record paths (`a.1.x`, `r.xs (0)`);
         `LField` selector; missing field is a type error. 7 e5_test cases;
         diff_e5 no-regression.
-  - [ ] e6 type-checking of lvalue paths (component type must match RHS).
+  - [x] e6: runtime (same functional update) + static checker. `check-lpath`
+        walks the base variable's type along the path (array→elem, record→
+        field, dynamic index must be int) and requires the addressed
+        component's type == RHS type; base keeps its type. 4 well-typed + 5
+        static-error e6_test cases; diff_e6 and diff_e6_illtyped no-regression.
   - [ ] efuzz: generate lvalue assignment, co-evaluate (functional update in
         the oracle), mutator/reducer support → differential validation.
   - [ ] specs (E3_SPEC or a note), FUZZING.md, examples.

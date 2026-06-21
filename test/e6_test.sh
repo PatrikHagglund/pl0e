@@ -63,6 +63,31 @@ check "unit_decl" "$E6 $TMP" "()"
 echo -e 'x : int\nprint x' > "$TMP"
 check "int_decl_default" "$E6 $TMP" "0"
 
+# lvalue assignment (functional update), well-typed: runs
+echo -e 'a : [int] = (1; 2; 3;)\na.0 := 9\nprint a' > "$TMP"
+check "lval_array_set" "$E6 $TMP" "(9; 2; 3;)"
+
+echo -e 'r : {x: int, y: int} = {x: 1, y: 2}\nr.x := 9\nprint r' > "$TMP"
+check "lval_record_set" "$E6 $TMP" "{x: 9, y: 2}"
+
+echo -e 'r : {a: {b: int}} = {a: {b: 1}}\nr.a.b := 8\nprint r' > "$TMP"
+check "lval_nested_set" "$E6 $TMP" "{a: {b: 8}}"
+
+echo -e 'a : [int] = (5; 6; 7;)\ni : int = 2\na (i) := 0\nprint a' > "$TMP"
+check "lval_dynamic_index" "$E6 $TMP" "(5; 6; 0;)"
+
+# lvalue assignment, ill-typed: rejected by the static checker
+check_static_error "lval_wrong_elem_type" 'a : [int] = (1; 2;)\na.0 := true\nprint a' \
+    "assignment to a component of 'a': expected int, got bool"
+check_static_error "lval_missing_field" 'r : {x: int} = {x: 1}\nr.y := 9\nprint r' \
+    "no field 'y' in {x: int}"
+check_static_error "lval_index_non_array" 'x : int = 5\nx.0 := 9\nprint x' \
+    "indexing a non-array (int) in assignment"
+check_static_error "lval_dyn_index_bool" 'a : [int] = (1; 2;)\nb : bool = true\na (b) := 9\nprint a' \
+    "array index: expected int, got bool"
+check_static_error "lval_field_on_array" 'a : [int] = (1; 2;)\na.x := 9\nprint a' \
+    "field assignment on [int]"
+
 # Statements before a static error still execute; the bad one never does
 echo -e 'print 5\nx : int = true\nprint 99' > "$TMP"
 out=$(timeout $TIMEOUT "$E6" "$TMP" 2>&1)

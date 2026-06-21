@@ -54,9 +54,16 @@ pub type expr
   ERecord(fields: list<(string, expr)>)
 
 // Statements
+// lvalue path selectors (component assignment): array index or record field
+pub type lsel
+  LIdx(i: int)
+  LDyn(e: expr)
+  LField(fld: string)
+
 pub type stmt
   SExpr(e: expr)
   SAssign(id: string, e: expr)
+  SAssignPath(id: string, path: list<lsel>, e: expr)  // a.i / r.f := e (functional update)
   SDecl(id: string)
   STypeDecl(name: string, t: ty)
   STypedDecl(id: string, t: ty)
@@ -78,6 +85,7 @@ pub type semval
   SVStmtArm(pat: pattern, body: stmt)
   SVBinopTail(op: string, rhs: expr)
   SVIndex(idx: int)
+  SVLSel(sel: lsel)         // lvalue selector for path assignment
   SVFieldSel(fld: string)
   SVField(fld: string, e: expr)
   SVPatField(fld: string, p: pattern)
@@ -269,10 +277,48 @@ fun eval-case-arms(scrut: rval, arms: list<(pattern, expr)>, e: e6env): <div,typ
         Just(binds) -> eval(body, env-extend(e, binds))
         Nothing -> eval-case-arms(scrut, rest, e)
 
+// Functional update along an lvalue path (value semantics, no aliasing). Used
+// only at runtime; the static checker has already verified the path is
+// well-typed, so the shape mismatches below are defensive.
+fun set-at(arr: vector<rval>, idx: int, v: rval): vector<rval>
+  arr.list.map-indexed(fn(i, x) if i == idx then v else x).vector
+
+fun rec-set(fields: list<(string, rval)>, fld: string, v: rval): list<(string, rval)>
+  fields.map(fn(p) if p.fst == fld then (fld, v) else p)
+
+fun update-path(v: rval, sels: list<lsel>, newv: rval, e: e6env): <div,type-error,violation> rval
+  match sels
+    Nil -> newv
+    Cons(LField(fld), rest) -> match v
+      VRec(fields) -> match fields.filter(fn(p) p.fst == fld)
+        Cons((_, cur), _) -> VRec(rec-set(fields, fld, update-path(cur, rest, newv, e)))
+        Nil -> do-type-error("no field '" ++ fld ++ "' in record assignment")
+      other -> do-type-error("field assignment on " ++ kind(other))
+    Cons(sel, rest) ->  // LIdx or LDyn
+      val idx = match sel
+        LIdx(i) -> i
+        LDyn(ix) -> match eval(ix, e)
+          VInt(n) -> n
+          other -> do-type-error("array index is " ++ kind(other))
+        LField(_) -> 0  // unreachable: handled above
+      match v
+        VArray(arr) -> match arr.at(idx)
+          Just(cur) -> VArray(set-at(arr, idx, update-path(cur, rest, newv, e)))
+          Nothing -> violate("oob", "assignment index " ++ idx.show ++ " out of bounds (length " ++ arr.length.show ++ ")", v)
+        other -> do-type-error("indexing " ++ kind(other) ++ " in assignment")
+
 fun exec(s: stmt, e: e6env): <div,console,loop-break,type-error,violation> e6env
   match s
     SExpr(_) -> e
     SAssign(id, ex) -> env-set(e, id, eval(ex, e))
+    SAssignPath(id, path, ex) ->
+      match e.filter(fn(p) p.fst == id)
+        Nil ->
+          val _ = violate("unbound", "assigning to component of undeclared '" ++ id ++ "'", VInt(0))
+          e
+        Cons((_, cur), _) ->
+          val newv = eval(ex, e)  // RHS evaluated before the path indices
+          env-set(e, id, update-path(cur, path, newv, e))
     SDecl(id) -> env-set(e, id, VInt(0))
     STypeDecl(_, _) -> e  // checker-only; no runtime effect
     STypedDecl(id, t) -> env-set(e, id, default-rval(t))
@@ -328,6 +374,9 @@ fun sv-to-expr(v: semval): maybe<expr>
 
 fun sv-to-pat(v: semval): maybe<pattern>
   match v { SVPat(p) -> Just(p); _ -> Nothing }
+
+fun sv-to-lsel(v: semval): maybe<lsel>
+  match v { SVLSel(s) -> Just(s); _ -> Nothing }
 
 fun fold-binop-tails(base: expr, tails: list<semval>): expr
   tails.foldl(base) fn(acc, tail)
@@ -395,6 +444,18 @@ fun e6-action(name: string, txt: string, children: list<semval>, caps: captures<
     "Var" -> SVExpr(EVar(cs.head.default(SVIdent("")).ident-str))
     "Assign" -> match cs
       Cons(SVIdent(id), Cons(SVExpr(e), _)) -> SVStmt(SAssign(id, e))
+      _ -> SVList(cs)
+    "LIdx" -> match cs
+      Cons(SVExpr(EVal(VInt(i))), _) -> SVLSel(LIdx(i))
+      _ -> SVList(cs)
+    "LDyn" -> match cs
+      Cons(SVExpr(ix), _) -> SVLSel(LDyn(ix))
+      _ -> SVList(cs)
+    "LField" -> SVLSel(LField(cs.head.default(SVIdent("")).ident-str))
+    "AssignPath" -> match cs  // [SVIdent base, SVLSel.., SVExpr rhs]
+      Cons(SVIdent(base), rest) -> match rest.reverse
+        Cons(SVExpr(rhs), sels-rev) -> SVStmt(SAssignPath(base, sels-rev.reverse.filter-map(sv-to-lsel), rhs))
+        _ -> SVList(cs)
       _ -> SVList(cs)
     "TypeDecl" -> match cs
       Cons(SVIdent(id), Cons(SVType(t), _)) -> SVStmt(STypeDecl(id, t))
@@ -737,6 +798,25 @@ fun check-pat-fields(al: taliases, fps: list<(string, pattern)>, fs: list<(strin
 
 // Statements. Returns the updated (tenv, aliases) for top-level
 // accumulation; nested bodies are checked conservatively (additions drop).
+// Walk an lvalue path through a type, returning the addressed component's type
+// (or a static error). Mirrors EIndex/EField checking; dynamic indices must be int.
+fun check-lpath(te: tenv, al: taliases, t0: ty, sels: list<lsel>): <div,static-error> ty
+  match sels
+    Nil -> t0
+    Cons(LField(fld), rest) -> match t0
+      TyRec(fs) -> match fs.filter(fn(f) f.fst == fld)
+        Cons((_, ft), _) -> check-lpath(te, al, ft, rest)
+        Nil -> serr("no field '" ++ fld ++ "' in " ++ show-ty(TyRec(fs)))
+      t -> serr("field assignment on " ++ show-ty(t))
+    Cons(LIdx(_), rest) -> match t0
+      TyArr(el) -> check-lpath(te, al, el, rest)
+      t -> serr("indexing a non-array (" ++ show-ty(t) ++ ") in assignment")
+    Cons(LDyn(ix), rest) -> match t0
+      TyArr(el) ->
+        expect("array index", TyInt, check-expr(te, al, ix))
+        check-lpath(te, al, el, rest)
+      t -> serr("indexing a non-array (" ++ show-ty(t) ++ ") in assignment")
+
 fun check-stmt(te: tenv, al: taliases, s: stmt): <div,static-error> (tenv, taliases)
   match s
     SExpr(e) ->
@@ -750,6 +830,15 @@ fun check-stmt(te: tenv, al: taliases, s: stmt): <div,static-error> (tenv, talia
             serr("assigning " ++ show-ty(t) ++ " to '" ++ id ++ "' of type " ++ show-ty(t0))
           else (te, al)
         Nothing -> (Cons((id, t), te), al)
+    SAssignPath(id, path, e) ->
+      match tlookup(te, id)
+        Nothing -> serr("assigning to a component of undeclared '" ++ id ++ "'")
+        Just(t0) ->
+          // The addressed component's type must match the RHS; the base
+          // variable keeps its type (an update can't change a structure's shape).
+          val ct = check-lpath(te, al, t0, path)
+          expect("assignment to a component of '" ++ id ++ "'", ct, check-expr(te, al, e))
+          (te, al)
     SDecl(id) -> (Cons((id, TyInt), te), al)  // bare decl defaults to int
     STypeDecl(name, t) -> (te, Cons((name, resolve(al, t)), al))
     STypedDecl(id, t) ->

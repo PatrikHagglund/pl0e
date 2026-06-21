@@ -20,9 +20,17 @@ print_stmt      = "print" _ e:expression { Print($e) }
 case_stmt       = "case" _ scrut:or_expr "{" _ stmt_arm+ "}" _ { CaseStmt }
 stmt_arm        = pat:pattern "->" _ body:statement { StmtArm($pat, $body) }
 
-binding         = id:ident _ ":=" _ e:expression { Assign($id, $e) }
+binding         = base:ident_raw path:lpath+ _ ":=" _ e:expression { AssignPath($base, $path, $e) }
+                / id:ident _ ":=" _ e:expression { Assign($id, $e) }
                 / id:ident _ ":" _ t:type_expr "=" _ e:expression { TypedBind($id, $t, $e) }
                 / id:ident _ ":" _ t:type_expr { TypedDecl($id, $t) }
+
+// lvalue path for component assignment (functional update): array index
+// (`a.0`/`a (i)`) and record field (`r.f`); selectors chain for nesting.
+// The checker requires the addressed component's type to match the RHS.
+lpath           = _ "." _ idx:int_lit_raw { LIdx($idx) }
+                / _ "." _ fld:ident_raw { LField($fld) }
+                / __ "(" _ i:expression _ ")" { LDyn($i) }
 
 // Type expressions
 type_expr       = func_type / nonfunc_type

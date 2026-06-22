@@ -1,0 +1,17 @@
+// Component assignment at e5: record fields and nested/mixed paths.
+// Same functional-update semantics as e4 arrays — no aliasing.
+p := {x: 1, y: 2}
+p.x := 9
+print p              // {x: 9, y: 2}
+
+q := p               // value copy
+p.y := 0             // updating p does not affect q
+print q              // {x: 9, y: 2}  -- unchanged
+
+r := {pos: {x: 0, y: 0}, n: 3}
+r.pos.x := 5         // nested record field
+print r              // {pos: {x: 5, y: 0}, n: 3}
+
+grid := ({a: 1}; {a: 2};)
+grid.1.a := 42       // record inside an array
+print grid           // ({a: 1}; {a: 42};)

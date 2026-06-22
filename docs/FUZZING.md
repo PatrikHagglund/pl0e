@@ -203,6 +203,13 @@ Future flags: `--level=e0..e4`, `--mode=emit|diff`.
      and expressions (exact, prefix, literal, binder patterns; bindings
      persist after statement arms, mirroring e4peg). Level-4 emission uses
      scrutinee cases for loops/ifs since guard-style case is not e4 syntax.
+     **Component assignment** (functional update, level 4+): array element
+     assignment `a.i := e` is generated here (and record field assignment
+     `r.f := e` at level 5+, including nested `r.f0.f1 := e`), each followed
+     by a read-back `print` so the update shows up in the diff output.
+     Co-evaluation does a pure functional update (no aliasing; out-of-bounds
+     array assignment is a no-op recording `oob`); the mutator rewrites
+     dynamic-index expressions. See docs/DESIGN.md "lvalue Assignment".
      Findings:
      - **e4 grammar bug (fixed):** `paren_expr` consumed trailing
        whitespace although `atom_raw` must not, so multi-argument

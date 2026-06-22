@@ -1,0 +1,18 @@
+// Component assignment at e6: the same functional update, statically checked.
+// The checker walks the lvalue path through the base variable's type and
+// requires the addressed component's type to match the right-hand side.
+xs : [int] = (10; 20; 30;)
+xs.1 := 99
+print xs             // (10; 99; 30;)
+
+p : {x: int, y: int} = {x: 1, y: 2}
+p.x := 7
+print p              // {x: 7, y: 2}
+
+r : {pos: {x: int, y: int}, n: int} = {pos: {x: 0, y: 0}, n: 3}
+r.pos.x := 5         // nested
+print r              // {pos: {x: 5, y: 0}, n: 3}
+
+// Ill-typed component assignments are rejected before execution, e.g.:
+//   xs.0 := true        -> Static error: ... expected int, got bool
+//   p.z := 1            -> Static error: no field 'z' in {x: int, y: int}

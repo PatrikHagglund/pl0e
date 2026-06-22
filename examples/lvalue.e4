@@ -1,0 +1,14 @@
+// Component assignment at e4: array elements (functional update).
+// `xs.i := e` rebinds xs to an updated copy — pure value semantics, no aliasing.
+xs := (10; 20; 30;)
+xs.1 := 99           // functional update
+print xs             // (10; 99; 30;)
+
+ys := xs             // value copy (snapshot of xs here)
+xs.0 := 0            // updating xs does not affect ys
+print xs             // (0; 99; 30;)
+print ys             // (10; 99; 30;)  -- unchanged
+
+i := 2
+xs (i) := 7          // dynamic index
+print xs             // (0; 99; 7;)

@@ -2,10 +2,11 @@
 
 ## Next
 
-- lvalue assignment paths (functional update) — IN PROGRESS (2026-06-21).
-  Design decided: `arr.i := e` etc. desugar to rebinding the base variable to
-  an updated copy (value semantics, no aliasing; root must be a variable);
-  see docs/DESIGN.md "lvalue Assignment: Functional Update".
+- ~~lvalue assignment paths (functional update)~~ DONE (2026-06-22).
+  `arr.i := e` etc. desugar to rebinding the base variable to an updated copy
+  (value semantics, no aliasing; root must be a variable); see docs/DESIGN.md
+  "lvalue Assignment: Functional Update". Shipped across e4/e5/e6 + the fuzzer
+  + docs/examples (the five sub-tasks below).
   - [x] e4 array element assignment (`arr.0 := e`, `arr (i) := e`, chained
         `arr.0 (i) := e`); e4.peg `lpath` rule + `SAssignPath`/`update-path`;
         7 e4_test cases; diff_e4 no-regression.
@@ -24,7 +25,9 @@
         update, oob no-op + viol); mutator (`mut-path`); reducer is automatic.
         Validated: 650 seeds across diff_e4/e5/e6 (+mutated, +ill-typed),
         0 fails; all 13 fuzz smokes pass.
-  - [ ] specs (E3_SPEC or a note), FUZZING.md, examples.
+  - [x] docs/examples: DESIGN.md "lvalue Assignment" section, FUZZING.md e4
+        note, README grammar-levels + example list, and lvalue.e4/e5/e6
+        example programs (output verified against their inline comments).
 - ~~efuzz e6 oracle: well-typed-by-construction programs must pass e6peg's
   static checker~~ DONE (2026-06-15): //fuzz:diff_e6 fails on any
   "Static error". Found+fixed two generator/checker discrepancies
@@ -70,8 +73,8 @@
   first bound inside loop/case/block bodies are not visible afterwards)
 - e5 deferred design questions (from the pre-implementation e5.peg draft,
   saved decisions for later): tuples `(a, b)`, optional case scrutinee,
-  block-as-expression (trailing expression value), lvalue assignment paths
-  (`rec.field := e`, `arr.0 := e`)
+  block-as-expression (trailing expression value). (lvalue assignment paths —
+  `rec.field := e`, `arr.0 := e` — are now DONE, see the top item.)
 - ~~efuzz Phase 3c: extend the generator to e5~~ DONE (2026-06-14):
   records (int-field literals, field access, record pattern-cases with
   width subtyping), RRec in the co-evaluator, mutator+reducer support,

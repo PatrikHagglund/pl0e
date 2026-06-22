@@ -45,8 +45,8 @@ Uses hermetic LLVM and Koka toolchains. See [docs/BAZEL.md](docs/BAZEL.md) for d
 | e1 | ℤ | + loop, break_ifz (Turing-complete, Minsky machine) |
 | e2 | ℤ | + case statements, break, blocks, comparisons, `*` `/` `%` |
 | e3 | ℤ, 𝔹, () → T | + booleans, callables, case expressions |
-| e4 | ℤ, 𝔹, [T], () → T | + arrays, pattern matching |
-| e5 | ℤ, 𝔹, [T], {…}, () → T, unit | + records, unit literal |
+| e4 | ℤ, 𝔹, [T], () → T | + arrays, pattern matching, component assignment (`a.i := e`) |
+| e5 | ℤ, 𝔹, [T], {…}, () → T, unit | + records, unit literal, field assignment (`r.f := e`) |
 | e6 | ℤ, 𝔹, [T], {…}, () → T, unit | + static typing, type definitions |
 
 Each level is almost a strict superset of the previous — the deliberate deviations (e.g. `break_ifz` dropped at e2+) are documented in [docs/DESIGN.md](docs/DESIGN.md).
@@ -68,6 +68,9 @@ Each level is almost a strict superset of the previous — the deliberate deviat
 - [factorial.e4](examples/factorial.e4) — Factorial benchmark (e4)
 - [collatz.e4](examples/collatz.e4) — Collatz sequence (e4)
 - [gcd.e4](examples/gcd.e4) — Euclidean algorithm with arrays (e4)
+- [lvalue.e4](examples/lvalue.e4) — Array element assignment, functional update (e4)
+- [lvalue.e5](examples/lvalue.e5) — Record field + nested/mixed component assignment (e5)
+- [lvalue.e6](examples/lvalue.e6) — Component assignment, statically type-checked (e6)
 
 ## Implementations
 

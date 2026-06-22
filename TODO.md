@@ -18,8 +18,12 @@
         field, dynamic index must be int) and requires the addressed
         component's type == RHS type; base keeps its type. 4 well-typed + 5
         static-error e6_test cases; diff_e6 and diff_e6_illtyped no-regression.
-  - [ ] efuzz: generate lvalue assignment, co-evaluate (functional update in
-        the oracle), mutator/reducer support → differential validation.
+  - [x] efuzz: generates component assignment (array `a.i := e`; record
+        field path to an int/bool leaf, incl. nested `r.f0.f1 := e`) with a
+        read-back print so it's observable; co-eval `fupdate` (functional
+        update, oob no-op + viol); mutator (`mut-path`); reducer is automatic.
+        Validated: 650 seeds across diff_e4/e5/e6 (+mutated, +ill-typed),
+        0 fails; all 13 fuzz smokes pass.
   - [ ] specs (E3_SPEC or a note), FUZZING.md, examples.
 - ~~efuzz e6 oracle: well-typed-by-construction programs must pass e6peg's
   static checker~~ DONE (2026-06-15): //fuzz:diff_e6 fails on any

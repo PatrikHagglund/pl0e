@@ -2,11 +2,13 @@
 
 ## Next
 
-- ~~lvalue assignment paths (functional update)~~ DONE (2026-06-22).
+- lvalue assignment paths (functional update) — DONE in the interpreters +
+  docs; efuzz generation DEFERRED (see last sub-task).
   `arr.i := e` etc. desugar to rebinding the base variable to an updated copy
   (value semantics, no aliasing; root must be a variable); see docs/DESIGN.md
-  "lvalue Assignment: Functional Update". Shipped across e4/e5/e6 + the fuzzer
-  + docs/examples (the five sub-tasks below).
+  "lvalue Assignment: Functional Update". Shipped across e4/e5/e6 + docs/
+  examples; the fuzzer-generation piece was written, validated, then reverted
+  on build-cost grounds (below).
   - [x] e4 array element assignment (`arr.0 := e`, `arr (i) := e`, chained
         `arr.0 (i) := e`); e4.peg `lpath` rule + `SAssignPath`/`update-path`;
         7 e4_test cases; diff_e4 no-regression.
@@ -19,12 +21,21 @@
         field, dynamic index must be int) and requires the addressed
         component's type == RHS type; base keeps its type. 4 well-typed + 5
         static-error e6_test cases; diff_e6 and diff_e6_illtyped no-regression.
-  - [x] efuzz: generates component assignment (array `a.i := e`; record
-        field path to an int/bool leaf, incl. nested `r.f0.f1 := e`) with a
-        read-back print so it's observable; co-eval `fupdate` (functional
-        update, oob no-op + viol); mutator (`mut-path`); reducer is automatic.
-        Validated: 650 seeds across diff_e4/e5/e6 (+mutated, +ill-typed),
-        0 fails; all 13 fuzz smokes pass.
+  - [~] efuzz generation: written and validated (generates array/record
+        component assignment with a read-back print; co-eval `fupdate`;
+        `mut-path`; 650 diff seeds across e4/e5/e6 +mutated +ill-typed, 0
+        fails) — then REVERTED (2026-06-22) because it tipped efuzz's Koka
+        compile time over the CI build budget (>1 h; was ~16 min). Root cause
+        is a Koka code-size explosion, NOT the `-O` level: at `-O3` with
+        specialization, koka generates a ~90 MB / 928k-line C file from the
+        1.7k-line efuzz.kk (~535×), so both koka codegen and the downstream
+        C compile take hours. The 3.2.7 specializer-loop fix makes it
+        terminate but does not bound the size; `--fno-specialize` (the 3.2.3
+        hermetic workaround) is also slow. Reproducer + analysis filed in
+        ../koka/EFUZZ-COMPILE-EXPLOSION-REPORT.md (+ efuzz-repro.kk) for a
+        Koka-side session. Re-add this once Koka bounds the specialized code
+        size (and a fixed release lets KOKA_VERSION bump + drop
+        `--fno-specialize`). Reverted code is in git history (commit f46cd20).
   - [x] docs/examples: DESIGN.md "lvalue Assignment" section, FUZZING.md e4
         note, README grammar-levels + example list, and lvalue.e4/e5/e6
         example programs (output verified against their inline comments).

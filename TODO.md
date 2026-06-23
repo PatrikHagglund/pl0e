@@ -25,17 +25,38 @@
         component assignment with a read-back print; co-eval `fupdate`;
         `mut-path`; 650 diff seeds across e4/e5/e6 +mutated +ill-typed, 0
         fails) — then REVERTED (2026-06-22) because it tipped efuzz's Koka
-        compile time over the CI build budget (>1 h; was ~16 min). Root cause
-        is a Koka code-size explosion, NOT the `-O` level: at `-O3` with
-        specialization, koka generates a ~90 MB / 928k-line C file from the
-        1.7k-line efuzz.kk (~535×), so both koka codegen and the downstream
-        C compile take hours. The 3.2.7 specializer-loop fix makes it
-        terminate but does not bound the size; `--fno-specialize` (the 3.2.3
-        hermetic workaround) is also slow. Reproducer + analysis filed in
-        ../koka/EFUZZ-COMPILE-EXPLOSION-REPORT.md (+ efuzz-repro.kk) for a
-        Koka-side session. Re-add this once Koka bounds the specialized code
-        size (and a fixed release lets KOKA_VERSION bump + drop
-        `--fno-specialize`). Reverted code is in git history (commit f46cd20).
+        compile over the CI build budget (>1 h; was already ~16 min). Reverted
+        efuzz code is in git history at commit `f46cd20`.
+
+        ROOT CAUSE — two independent Koka optimizer bugs (both root-caused and
+        fixed upstream by a Koka-side session; analysis in
+        ../koka/EFUZZ-COMPILE-EXPLOSION-REPORT.md, SPECIALIZER-LOOP-REPORT.md,
+        efuzz-explosion-repro/):
+          1. specializer infinite loop at -O1+ on the effect-polymorphic
+             co-evaluator → this is why `src/BUILD.bazel` passes
+             `--fno-specialize`. Fix: koka-lang/koka PR #899.
+          2. core simplifier case-of-case rule duplicates ~2^n on `if/elif`
+             chains whose guards use `&&`/`||`; the generator is full of these,
+             so one ~75-line fn blows up to ~300k core nodes → ~90 MB / 928k-
+             line C. NOT dodged by `--fno-specialize`. Fix: koka-lang/koka
+             PR #902. (With both fixes, full efuzz compiles at -O3 in ~60s,
+             output identical to -O0.)
+
+        RE-ENABLE (preferred): once #899 AND #902 ship in a Koka release, bump
+        KOKA_VERSION in rules_koka/koka/private/repo.bzl, drop
+        `--fno-specialize` from the efuzz target in src/BUILD.bazel, and
+        cherry-pick/restore the reverted lvalue fuzzer-gen (f46cd20). CI stays
+        hermetic; no source hacks.
+
+        FALLBACK (if upstream takes too long — gives fast HERMETIC build on
+        stock 3.2.x): in efuzz.kk, wrap only the *guard-position* `&&`/`||`
+        (the `if/elif ... then` chains in gen-iexpr/gen-bexpr/gen-guard/
+        gen-assign/gen-stmt/gen-pat/gen-one-field/gen-lvalue) in `noinline`
+        helpers `iand(a,b)=if a then b else False` / `ior(a,b)=if a then True
+        else b`, and keep `--fno-specialize` (still needed for bug #1). Do NOT
+        touch the `&&`/`||` that build `FAnd`/`FOr` AST nodes or appear in
+        feval/show/mut — those are fine. (`noinline` is required; iand/ior are
+        eager, safe only because every guard operand here is pure+total.)
   - [x] docs/examples: DESIGN.md "lvalue Assignment" section, FUZZING.md e4
         note, README grammar-levels + example list, and lvalue.e4/e5/e6
         example programs (output verified against their inline comments).
